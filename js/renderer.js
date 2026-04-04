@@ -116,6 +116,9 @@ const Renderer = (() => {
     pos.needsUpdate = true;
     paperGeo.computeVertexNormals();
 
+    // Redraw crease lines to follow the deformed mesh
+    if (currentCreaseData) redrawCreaseLines();
+
     // Update edge wireframe
     if (edgeLines) {
       foldGroup.remove(edgeLines);
@@ -127,36 +130,78 @@ const Renderer = (() => {
     }
   }
 
+  // Store current crease line data so we can redraw when paper moves
+  var currentCreaseData = null;
+  var currentActiveIdx = -1;
+
   /**
-   * Draw fold lines on the paper surface.
-   * These show where future folds will happen.
-   * Mountain = red, Valley = blue, completed = gray
+   * Look up the folded 3D position for a point on the unit square [0,1]x[0,1]
+   * by bilinear interpolation from the mesh grid.
+   */
+  function sampleFoldedPosition(ux, uz, nOff) {
+    var pos = paperGeo.attributes.position;
+    var n = SEGS + 1; // vertices per row
+
+    // Clamp to mesh bounds
+    var fx = Math.max(0, Math.min(1, ux)) * SEGS;
+    var fz = Math.max(0, Math.min(1, uz)) * SEGS;
+    var col = Math.floor(fx), row = Math.floor(fz);
+    col = Math.min(col, SEGS - 1);
+    row = Math.min(row, SEGS - 1);
+    var tx = fx - col, tz = fz - row;
+
+    // Four corners of the grid cell
+    var i00 = row * n + col;
+    var i10 = row * n + col + 1;
+    var i01 = (row + 1) * n + col;
+    var i11 = (row + 1) * n + col + 1;
+
+    // Bilinear interpolation
+    var x = (1 - tx) * (1 - tz) * pos.getX(i00) + tx * (1 - tz) * pos.getX(i10) +
+            (1 - tx) * tz * pos.getX(i01) + tx * tz * pos.getX(i11);
+    var y = (1 - tx) * (1 - tz) * pos.getY(i00) + tx * (1 - tz) * pos.getY(i10) +
+            (1 - tx) * tz * pos.getY(i01) + tx * tz * pos.getY(i11);
+    var z = (1 - tx) * (1 - tz) * pos.getZ(i00) + tx * (1 - tz) * pos.getZ(i10) +
+            (1 - tx) * tz * pos.getZ(i01) + tx * tz * pos.getZ(i11);
+
+    // Offset slightly along normal for front/back
+    return new THREE.Vector3(x, y + nOff, z);
+  }
+
+  /**
+   * Draw fold lines on the paper surface, deformed with the mesh.
+   * Each line is sampled as a polyline of ~20 points that follow the paper.
    */
   function updateCreaseLines(lines, activeIdx) {
+    currentCreaseData = lines;
+    currentActiveIdx = activeIdx || -1;
+    redrawCreaseLines();
+  }
+
+  function redrawCreaseLines() {
     while (creaseLinesGroup.children.length) {
-      const c = creaseLinesGroup.children[0];
+      var c = creaseLinesGroup.children[0];
       if (c.geometry) c.geometry.dispose();
       if (c.material) c.material.dispose();
       creaseLinesGroup.remove(c);
     }
+    var lines = currentCreaseData;
     if (!lines || !showCL) return;
 
-    activeIdx = activeIdx || -1;
+    var SAMPLES = 20;
 
-    for (let i = 0; i < lines.length; i++) {
-      const step = lines[i];
+    for (var i = 0; i < lines.length; i++) {
+      var step = lines[i];
 
-      // Front side: mountain=red, valley=blue
-      // Back side: swapped (mountain becomes valley from behind, vice versa)
       var sides = [
-        { yOff:  0.005, type: step.type },          // front
-        { yOff: -0.005, type: step.type === 'mountain' ? 'valley' : step.type === 'valley' ? 'mountain' : step.type }  // back (swapped)
+        { nOff:  0.005, type: step.type },
+        { nOff: -0.005, type: step.type === 'mountain' ? 'valley' : step.type === 'valley' ? 'mountain' : step.type }
       ];
 
       for (var s = 0; s < sides.length; s++) {
         var side = sides[s];
         var col, opacity;
-        if (i < activeIdx) {
+        if (i < currentActiveIdx) {
           col = s === 0 ? 0xaaaaaa : 0x666666; opacity = 0.5;
         } else if (side.type === 'mountain') {
           col = s === 0 ? 0xcc3333 : 0xff2222; opacity = 1.0;
@@ -167,18 +212,21 @@ const Renderer = (() => {
         }
 
         var material = new THREE.LineDashedMaterial({
-          color: col,
-          transparent: true,
-          opacity: opacity,
+          color: col, transparent: true, opacity: opacity,
           dashSize: side.type === 'mountain' ? 0.08 : 0.05,
           gapSize: side.type === 'mountain' ? 0.03 : 0.02,
           linewidth: 2
         });
 
-        var pts = [
-          new THREE.Vector3((step.line.x1 - 0.5) * 2, side.yOff, (step.line.y1 - 0.5) * 2),
-          new THREE.Vector3((step.line.x2 - 0.5) * 2, side.yOff, (step.line.y2 - 0.5) * 2)
-        ];
+        // Sample points along the crease line, mapped through folded mesh
+        var pts = [];
+        for (var t = 0; t <= SAMPLES; t++) {
+          var frac = t / SAMPLES;
+          var ux = step.line.x1 + (step.line.x2 - step.line.x1) * frac;
+          var uz = step.line.y1 + (step.line.y2 - step.line.y1) * frac;
+          pts.push(sampleFoldedPosition(ux, uz, side.nOff));
+        }
+
         var geo = new THREE.BufferGeometry().setFromPoints(pts);
         var line = new THREE.Line(geo, material);
         line.computeLineDistances();
