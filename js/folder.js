@@ -108,15 +108,17 @@ const FoldEngine = (() => {
   /**
    * Compute the fully folded state at globalProgress through all steps.
    *
-   * Steps execute sequentially. For each completed step, apply the full fold
-   * and update the classification positions for the next step.
-   * The active (partial) step uses interpolated progress.
+   * All fold lines are defined on the original flat paper (unit square),
+   * so we ALWAYS classify vertices using their original 2D positions.
+   * This avoids the bug where folded 3D positions overlap in XZ projection
+   * and cause misclassification on subsequent steps.
    */
   function computeFoldState(baseMesh, steps, globalProgress) {
     if (!steps || !steps.length) return baseMesh.vertices.map(v => ({ ...v }));
 
     let verts = baseMesh.vertices.map(v => ({ ...v }));
-    let classifyPos = baseMesh.vertices.map(v => ({ ...v }));
+    // Always use original flat positions for side classification
+    const originalPos = baseMesh.vertices.map(v => ({ ...v }));
 
     const count = steps.length;
     const sliceW = 1 / count;
@@ -131,12 +133,7 @@ const FoldEngine = (() => {
       const raw = Math.min(1, (globalProgress - start) / (end - start));
       const progress = ease(raw);
 
-      verts = applyFold(verts, classifyPos, steps[i], progress);
-
-      // Once step is complete, update classify positions for next step
-      if (raw >= 1) {
-        classifyPos = verts.map(v => ({ ...v }));
-      }
+      verts = applyFold(verts, originalPos, steps[i], progress);
     }
     return verts;
   }

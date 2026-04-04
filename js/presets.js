@@ -10,6 +10,9 @@
  */
 const Presets = (() => {
 
+  // All fold lines are in ORIGINAL flat paper coordinates [0,1]x[0,1].
+  // The fold engine always classifies vertices using their original position,
+  // so each line divides the unfolded sheet into two halves.
   const DATA = {
     crane: {
       name: 'Crane',
@@ -21,30 +24,31 @@ const Presets = (() => {
         edges: [[0,1],[0,2],[0,3],[3,4],[3,5],[3,6]]
       },
       steps: [
+        // Preliminary base: two diagonal folds + two book folds
         {id:'A', label:'Valley fold in half diagonally', type:'valley',
          line:{x1:0,y1:0,x2:1,y2:1}, angle:180},
-        {id:'B', label:'Valley fold triangle in half', type:'valley',
-         line:{x1:0,y1:1,x2:0.5,y2:0.5}, angle:180},
-        {id:'C', label:'Squash fold left flap', type:'mountain',
-         line:{x1:0.25,y1:0.5,x2:0.5,y2:1}, angle:180},
-        {id:'D', label:'Squash fold right flap', type:'mountain',
-         line:{x1:0.5,y1:0.5,x2:0.75,y2:1}, angle:180},
+        {id:'B', label:'Valley fold other diagonal', type:'valley',
+         line:{x1:1,y1:0,x2:0,y2:1}, angle:180},
+        {id:'C', label:'Mountain fold in half vertically', type:'mountain',
+         line:{x1:0.5,y1:0,x2:0.5,y2:1}, angle:180},
+        {id:'D', label:'Mountain fold in half horizontally', type:'mountain',
+         line:{x1:0,y1:0.5,x2:1,y2:0.5}, angle:180},
+        // Kite folds on front: fold edges to center diagonal
         {id:'E', label:'Kite fold left edge to center', type:'valley',
-         line:{x1:0.25,y1:0.5,x2:0.5,y2:0.85}, angle:180},
+         line:{x1:0,y1:0,x2:0.5,y2:0.5}, angle:45},
         {id:'F', label:'Kite fold right edge to center', type:'valley',
-         line:{x1:0.75,y1:0.5,x2:0.5,y2:0.85}, angle:180},
-        {id:'G', label:'Fold top triangle down', type:'valley',
-         line:{x1:0.25,y1:0.5,x2:0.75,y2:0.5}, angle:180},
-        {id:'H', label:'Petal fold — lift and flatten', type:'mountain',
-         line:{x1:0.35,y1:0.55,x2:0.65,y2:0.55}, angle:160},
-        {id:'I', label:'Reverse fold neck', type:'mountain',
-         line:{x1:0.35,y1:0.4,x2:0.5,y2:0.6}, angle:140},
-        {id:'J', label:'Reverse fold tail', type:'mountain',
-         line:{x1:0.5,y1:0.6,x2:0.65,y2:0.4}, angle:140},
-        {id:'K', label:'Reverse fold head', type:'valley',
-         line:{x1:0.3,y1:0.3,x2:0.4,y2:0.45}, angle:120},
-        {id:'L', label:'Fold wings down', type:'valley',
-         line:{x1:0.3,y1:0.5,x2:0.7,y2:0.5}, angle:150}
+         line:{x1:1,y1:0,x2:0.5,y2:0.5}, angle:45},
+        // Neck and tail: narrow folds from bottom corners
+        {id:'G', label:'Reverse fold — neck', type:'mountain',
+         line:{x1:0,y1:0.5,x2:0.25,y2:1}, angle:60},
+        {id:'H', label:'Reverse fold — tail', type:'mountain',
+         line:{x1:1,y1:0.5,x2:0.75,y2:1}, angle:60},
+        // Head
+        {id:'I', label:'Reverse fold — head', type:'valley',
+         line:{x1:0,y1:0.75,x2:0.15,y2:1}, angle:45},
+        // Wings
+        {id:'J', label:'Fold wings down', type:'valley',
+         line:{x1:0.25,y1:0.25,x2:0.75,y2:0.25}, angle:35}
       ]
     },
 
@@ -58,56 +62,43 @@ const Presets = (() => {
         edges: [[0,1],[0,2],[1,3],[2,4]]
       },
       steps: [
-        {id:'A', label:'Valley fold in half horizontally', type:'valley',
+        {id:'A', label:'Valley fold in half', type:'valley',
          line:{x1:0,y1:0.5,x2:1,y2:0.5}, angle:180},
-        {id:'B', label:'Valley fold top corners down', type:'valley',
-         line:{x1:0.25,y1:0.5,x2:0.5,y2:0.75}, angle:180},
-        {id:'C', label:'Valley fold top corners down (right)', type:'valley',
-         line:{x1:0.5,y1:0.75,x2:0.75,y2:0.5}, angle:180},
-        {id:'D', label:'Fold bottom strip up (front)', type:'valley',
-         line:{x1:0,y1:0.3,x2:1,y2:0.3}, angle:180},
-        {id:'E', label:'Fold bottom strip up (back)', type:'mountain',
-         line:{x1:0,y1:0.25,x2:1,y2:0.25}, angle:180},
-        {id:'F', label:'Tuck corners into pocket', type:'mountain',
-         line:{x1:0.15,y1:0.25,x2:0.25,y2:0.4}, angle:160},
-        {id:'G', label:'Tuck corners (right side)', type:'mountain',
-         line:{x1:0.75,y1:0.4,x2:0.85,y2:0.25}, angle:160},
-        {id:'H', label:'Open and flatten into boat', type:'valley',
-         line:{x1:0.5,y1:0.25,x2:0.5,y2:0.75}, angle:120}
+        {id:'B', label:'Fold left corner to center', type:'valley',
+         line:{x1:0.5,y1:0,x2:0,y2:0.5}, angle:180},
+        {id:'C', label:'Fold right corner to center', type:'valley',
+         line:{x1:0.5,y1:0,x2:1,y2:0.5}, angle:180},
+        {id:'D', label:'Fold bottom strip up', type:'valley',
+         line:{x1:0,y1:0.75,x2:1,y2:0.75}, angle:180},
+        {id:'E', label:'Open hull', type:'mountain',
+         line:{x1:0.5,y1:0,x2:0.5,y2:1}, angle:90}
       ]
     },
 
-    frog: {
-      name: 'Frog',
+    fortune: {
+      name: 'Fortune Teller',
       tree: {
         nodes: [
-          {id:0,x:134,y:134,r:9},{id:1,x:54,y:60,r:20},{id:2,x:214,y:60,r:20},
-          {id:3,x:54,y:236,r:20},{id:4,x:214,y:236,r:20},
-          {id:5,x:134,y:46,r:13},{id:6,x:134,y:246,r:13}
+          {id:0,x:134,y:148,r:8},{id:1,x:54,y:68,r:18},{id:2,x:214,y:68,r:18},
+          {id:3,x:54,y:228,r:18},{id:4,x:214,y:228,r:18}
         ],
-        edges: [[0,1],[0,2],[0,3],[0,4],[0,5],[0,6]]
+        edges: [[0,1],[0,2],[0,3],[0,4]]
       },
       steps: [
-        {id:'A', label:'Valley fold in half diagonally', type:'valley',
-         line:{x1:0,y1:0,x2:1,y2:1}, angle:180},
-        {id:'B', label:'Valley fold in half again', type:'valley',
-         line:{x1:0,y1:1,x2:0.5,y2:0.5}, angle:180},
-        {id:'C', label:'Squash fold to square', type:'mountain',
-         line:{x1:0.25,y1:0.5,x2:0.5,y2:1}, angle:180},
-        {id:'D', label:'Kite fold edges to center', type:'valley',
-         line:{x1:0.25,y1:0.5,x2:0.5,y2:0.8}, angle:180},
-        {id:'E', label:'Kite fold right side', type:'valley',
-         line:{x1:0.75,y1:0.5,x2:0.5,y2:0.8}, angle:180},
-        {id:'F', label:'Petal fold front flap up', type:'mountain',
-         line:{x1:0.3,y1:0.55,x2:0.7,y2:0.55}, angle:160},
-        {id:'G', label:'Fold front legs down', type:'valley',
-         line:{x1:0.3,y1:0.6,x2:0.5,y2:0.4}, angle:140},
-        {id:'H', label:'Fold front legs down (right)', type:'valley',
-         line:{x1:0.5,y1:0.4,x2:0.7,y2:0.6}, angle:140},
-        {id:'I', label:'Fold back legs outward', type:'mountain',
-         line:{x1:0.3,y1:0.7,x2:0.5,y2:0.85}, angle:130},
-        {id:'J', label:'Fold back legs outward (right)', type:'mountain',
-         line:{x1:0.5,y1:0.85,x2:0.7,y2:0.7}, angle:130}
+        // Fold all 4 corners to center — classic fortune teller / cootie catcher
+        {id:'A', label:'Fold top-left corner to center', type:'valley',
+         line:{x1:0,y1:0.5,x2:0.5,y2:0}, angle:180},
+        {id:'B', label:'Fold top-right corner to center', type:'valley',
+         line:{x1:0.5,y1:0,x2:1,y2:0.5}, angle:180},
+        {id:'C', label:'Fold bottom-right corner to center', type:'valley',
+         line:{x1:1,y1:0.5,x2:0.5,y2:1}, angle:180},
+        {id:'D', label:'Fold bottom-left corner to center', type:'valley',
+         line:{x1:0.5,y1:1,x2:0,y2:0.5}, angle:180},
+        // Fold in half then open
+        {id:'E', label:'Valley fold in half', type:'valley',
+         line:{x1:0,y1:0.5,x2:1,y2:0.5}, angle:120},
+        {id:'F', label:'Valley fold in half again', type:'valley',
+         line:{x1:0.5,y1:0,x2:0.5,y2:1}, angle:120}
       ]
     },
 
@@ -121,25 +112,24 @@ const Presets = (() => {
         edges: [[0,1],[0,2],[0,3]]
       },
       steps: [
-        {id:'A', label:'Valley fold in half diagonally', type:'valley',
-         line:{x1:0,y1:0,x2:1,y2:1}, angle:180},
-        {id:'B', label:'Fold edges to diagonal', type:'valley',
-         line:{x1:0,y1:0.35,x2:0.35,y2:0}, angle:180},
-        {id:'C', label:'Fold edges to diagonal (lower)', type:'valley',
-         line:{x1:0.65,y1:1,x2:1,y2:0.65}, angle:180},
-        {id:'D', label:'Mountain fold in half', type:'mountain',
-         line:{x1:0.25,y1:0.25,x2:0.75,y2:0.75}, angle:180},
-        {id:'E', label:'Fold tail fin', type:'valley',
-         line:{x1:0.7,y1:0.5,x2:0.85,y2:0.7}, angle:140},
-        {id:'F', label:'Fold head point', type:'valley',
-         line:{x1:0.15,y1:0.3,x2:0.3,y2:0.5}, angle:120},
-        {id:'G', label:'Shape body', type:'mountain',
-         line:{x1:0.3,y1:0.4,x2:0.7,y2:0.6}, angle:100}
+        // Fish base: kite fold then fold in half
+        {id:'A', label:'Fold top-left edge to diagonal', type:'valley',
+         line:{x1:0,y1:0,x2:0.5,y2:0.5}, angle:180},
+        {id:'B', label:'Fold bottom-left edge to diagonal', type:'valley',
+         line:{x1:0,y1:1,x2:0.5,y2:0.5}, angle:180},
+        {id:'C', label:'Fold top-right edge to diagonal', type:'valley',
+         line:{x1:1,y1:0,x2:0.5,y2:0.5}, angle:180},
+        {id:'D', label:'Fold bottom-right edge to diagonal', type:'valley',
+         line:{x1:1,y1:1,x2:0.5,y2:0.5}, angle:180},
+        {id:'E', label:'Mountain fold in half', type:'mountain',
+         line:{x1:0,y1:0,x2:1,y2:1}, angle:90},
+        {id:'F', label:'Fold tail fin up', type:'valley',
+         line:{x1:0.75,y1:0.75,x2:1,y2:0.5}, angle:60}
       ]
     },
 
-    star: {
-      name: 'Star',
+    waterbomb: {
+      name: 'Water Bomb',
       tree: {
         nodes: [
           {id:0,x:134,y:148,r:8},{id:1,x:134,y:53,r:17},{id:2,x:217,y:106,r:17},
@@ -148,22 +138,25 @@ const Presets = (() => {
         edges: [[0,1],[0,2],[0,3],[0,4],[0,5]]
       },
       steps: [
-        {id:'A', label:'Valley fold bottom edge up', type:'valley',
-         line:{x1:0,y1:0.6,x2:1,y2:0.6}, angle:180},
-        {id:'B', label:'Valley fold left side', type:'valley',
-         line:{x1:0.3,y1:0,x2:0.5,y2:0.6}, angle:180},
-        {id:'C', label:'Valley fold right side', type:'valley',
-         line:{x1:0.5,y1:0.6,x2:0.7,y2:0}, angle:180},
-        {id:'D', label:'Mountain fold left point behind', type:'mountain',
-         line:{x1:0.15,y1:0.3,x2:0.4,y2:0.5}, angle:160},
-        {id:'E', label:'Mountain fold right point behind', type:'mountain',
-         line:{x1:0.6,y1:0.5,x2:0.85,y2:0.3}, angle:160},
-        {id:'F', label:'Fold top point down', type:'valley',
-         line:{x1:0.35,y1:0.2,x2:0.65,y2:0.2}, angle:150},
-        {id:'G', label:'Shape bottom points outward', type:'valley',
-         line:{x1:0.3,y1:0.7,x2:0.7,y2:0.7}, angle:130},
-        {id:'H', label:'Final shaping folds', type:'mountain',
-         line:{x1:0.4,y1:0.35,x2:0.6,y2:0.35}, angle:110}
+        // Water bomb base: two diagonals (valley) + two book folds (mountain)
+        {id:'A', label:'Valley fold diagonal', type:'valley',
+         line:{x1:0,y1:0,x2:1,y2:1}, angle:180},
+        {id:'B', label:'Valley fold other diagonal', type:'valley',
+         line:{x1:1,y1:0,x2:0,y2:1}, angle:180},
+        {id:'C', label:'Mountain fold horizontally', type:'mountain',
+         line:{x1:0,y1:0.5,x2:1,y2:0.5}, angle:180},
+        {id:'D', label:'Mountain fold vertically', type:'mountain',
+         line:{x1:0.5,y1:0,x2:0.5,y2:1}, angle:180},
+        // Fold flaps up to form the bomb
+        {id:'E', label:'Fold left flap up', type:'valley',
+         line:{x1:0,y1:1,x2:0.5,y2:0.5}, angle:90},
+        {id:'F', label:'Fold right flap up', type:'valley',
+         line:{x1:1,y1:1,x2:0.5,y2:0.5}, angle:90},
+        // Tuck flaps
+        {id:'G', label:'Tuck left corner in', type:'mountain',
+         line:{x1:0.25,y1:0.5,x2:0.5,y2:0.75}, angle:60},
+        {id:'H', label:'Tuck right corner in', type:'mountain',
+         line:{x1:0.75,y1:0.5,x2:0.5,y2:0.75}, angle:60}
       ]
     },
 
@@ -179,28 +172,29 @@ const Presets = (() => {
         edges: [[0,1],[0,2],[0,3],[0,4],[0,5],[0,6],[0,7],[0,8]]
       },
       steps: [
-        {id:'A', label:'Valley fold in half vertically', type:'valley',
+        // Bird base then split into legs
+        {id:'A', label:'Valley fold diagonal', type:'valley',
+         line:{x1:0,y1:0,x2:1,y2:1}, angle:180},
+        {id:'B', label:'Valley fold other diagonal', type:'valley',
+         line:{x1:1,y1:0,x2:0,y2:1}, angle:180},
+        {id:'C', label:'Mountain fold horizontally', type:'mountain',
+         line:{x1:0,y1:0.5,x2:1,y2:0.5}, angle:180},
+        {id:'D', label:'Mountain fold vertically', type:'mountain',
          line:{x1:0.5,y1:0,x2:0.5,y2:1}, angle:180},
-        {id:'B', label:'Valley fold in half horizontally', type:'valley',
-         line:{x1:0,y1:0.5,x2:0.5,y2:0.5}, angle:180},
-        {id:'C', label:'Squash fold to preliminary base', type:'mountain',
-         line:{x1:0.25,y1:0.25,x2:0.5,y2:0.5}, angle:180},
-        {id:'D', label:'Petal fold front', type:'valley',
-         line:{x1:0.15,y1:0.35,x2:0.35,y2:0.65}, angle:170},
-        {id:'E', label:'Petal fold back', type:'mountain',
-         line:{x1:0.15,y1:0.65,x2:0.35,y2:0.35}, angle:170},
-        {id:'F', label:'Fold antenna left', type:'valley',
-         line:{x1:0.2,y1:0.2,x2:0.35,y2:0.35}, angle:140},
-        {id:'G', label:'Fold antenna right', type:'valley',
-         line:{x1:0.35,y1:0.35,x2:0.5,y2:0.2}, angle:140},
-        {id:'H', label:'Fold front legs out', type:'mountain',
-         line:{x1:0.2,y1:0.4,x2:0.4,y2:0.5}, angle:130},
-        {id:'I', label:'Fold middle legs out', type:'mountain',
-         line:{x1:0.2,y1:0.55,x2:0.4,y2:0.6}, angle:130},
-        {id:'J', label:'Fold back legs down', type:'valley',
-         line:{x1:0.2,y1:0.7,x2:0.4,y2:0.8}, angle:120},
-        {id:'K', label:'Shape abdomen', type:'mountain',
-         line:{x1:0.25,y1:0.8,x2:0.45,y2:0.9}, angle:100}
+        // Narrow folds for legs — kite-fold edges to center line
+        {id:'E', label:'Fold left edge to center', type:'valley',
+         line:{x1:0,y1:0,x2:0.5,y2:0.5}, angle:60},
+        {id:'F', label:'Fold right edge to center', type:'valley',
+         line:{x1:1,y1:0,x2:0.5,y2:0.5}, angle:60},
+        {id:'G', label:'Fold bottom-left to center', type:'valley',
+         line:{x1:0,y1:1,x2:0.5,y2:0.5}, angle:60},
+        {id:'H', label:'Fold bottom-right to center', type:'valley',
+         line:{x1:1,y1:1,x2:0.5,y2:0.5}, angle:60},
+        // Shape legs outward
+        {id:'I', label:'Fold front legs out', type:'mountain',
+         line:{x1:0.25,y1:0,x2:0.5,y2:0.25}, angle:45},
+        {id:'J', label:'Fold back legs out', type:'mountain',
+         line:{x1:0.25,y1:1,x2:0.5,y2:0.75}, angle:45}
       ]
     }
   };
