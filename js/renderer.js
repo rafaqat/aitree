@@ -67,9 +67,9 @@ const Renderer = (() => {
     paperFront = new THREE.Mesh(paperGeo, frontMat);
     foldGroup.add(paperFront);
 
-    // Back side: dark charcoal
+    // Back side: dark gray (not black — fold lines need to be visible)
     const backMat = new THREE.MeshStandardMaterial({
-      color: 0x2a2a2a,
+      color: 0x505050,
       roughness: 0.9,
       metalness: 0.0,
       side: THREE.BackSide
