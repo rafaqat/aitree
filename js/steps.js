@@ -58,10 +58,7 @@ const StepSequencer = (() => {
     if (!steps.length) return;
     animating = false;
     const count = steps.length;
-    const sliceW = 1 / count;
-    const overlap = 0.15;
-    const end = Math.min(1, (index + 1) * sliceW + overlap * 0.5);
-    globalT = end;
+    globalT = Math.min(1, (index + 1) / count);
     notify();
   }
 
@@ -115,14 +112,12 @@ const StepSequencer = (() => {
   /** Update step list active/done states */
   function updateStepList(globalT) {
     const count = steps.length;
-    const sliceW = 1 / count;
-    const overlap = 0.15;
 
     steps.forEach((_, i) => {
       const el = document.getElementById('step-' + i);
       if (!el) return;
-      const start = Math.max(0, i * sliceW - overlap * 0.5);
-      const end = Math.min(1, (i + 1) * sliceW + overlap * 0.5);
+      const start = i / count;
+      const end = (i + 1) / count;
 
       if (globalT <= start) el.className = 'step-item';
       else if (globalT >= end) el.className = 'step-item done';
@@ -138,10 +133,8 @@ const StepSequencer = (() => {
     if (idx >= 0 && idx < steps.length) {
       const s = steps[idx];
       const count = steps.length;
-      const sliceW = 1 / count;
-      const overlap = 0.15;
-      const start = Math.max(0, idx * sliceW - overlap * 0.5);
-      const end = Math.min(1, (idx + 1) * sliceW + overlap * 0.5);
+      const start = idx / count;
+      const end = (idx + 1) / count;
       const progress = (globalT - start) / (end - start);
       if (progress > 0 && progress < 1) {
         overlay.textContent = 'Step ' + s.id + ': ' + s.label;

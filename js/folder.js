@@ -152,20 +152,19 @@ const FoldEngine = (() => {
       pz[i] = flatPositions[i * 3 + 2];
     }
 
-    // Accumulate each step's delta weighted by eased progress
+    // Each step gets its own discrete slice — one fold at a time.
+    // Previous steps are fully applied (stepT=1), current step animates.
     const count = steps.length;
     const sliceW = 1 / count;
-    const overlap = 0.15;
 
     for (let si = 0; si < count; si++) {
-      const start = Math.max(0, si * sliceW - overlap * 0.5);
-      const end = Math.min(1, (si + 1) * sliceW + overlap * 0.5);
+      const start = si * sliceW;
+      const end = (si + 1) * sliceW;
 
-      if (globalProgress <= start) continue;
+      if (globalProgress <= start) break; // haven't reached this step yet
 
       const raw = Math.min(1, (globalProgress - start) / (end - start));
       const stepT = ease(raw);
-      if (stepT <= 0) continue;
 
       const delta = deltas[si];
       for (let i = 0; i < nV; i++) {
@@ -194,16 +193,8 @@ const FoldEngine = (() => {
   /** Which step index is active at globalProgress */
   function activeStepIndex(steps, globalProgress) {
     if (!steps || !steps.length) return -1;
-    const count = steps.length;
-    const sliceW = 1 / count;
-    const overlap = 0.15;
-
-    for (let i = count - 1; i >= 0; i--) {
-      const start = Math.max(0, i * sliceW - overlap * 0.5);
-      const end = Math.min(1, (i + 1) * sliceW + overlap * 0.5);
-      if (globalProgress > start && globalProgress <= end) return i;
-    }
-    return globalProgress >= 1 ? count - 1 : 0;
+    const idx = Math.floor(globalProgress * steps.length);
+    return Math.min(idx, steps.length - 1);
   }
 
   return { createPaperMesh, precomputeDeltas, buildFlatArray, computeFoldState,
