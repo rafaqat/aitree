@@ -69,13 +69,20 @@ const FoldEngine = (() => {
         const along = pvx * ux + pvy * uy; // distance along crease
         const perp = pvx * nx + pvy * ny;  // signed distance from crease
 
-        if (Math.abs(perp) < 0.001) {
+        if (Math.abs(perp) < 0.0005) {
           delta[i * 3] = 0; delta[i * 3 + 1] = 0; delta[i * 3 + 2] = 0;
           continue;
         }
 
-        // Soft exponential falloff — nearby vertices fold sharply, far ones gently
-        const influence = Math.exp(-Math.abs(perp) * 0.8);
+        // Steep sigmoid: flat panels with sharp hinge at the crease.
+        // Vertices on the positive side get full rotation (influence → 1.0),
+        // vertices on negative side stay put (influence → 0.0),
+        // with a narrow smooth transition at the crease itself.
+        const HINGE_SHARPNESS = 60; // higher = sharper crease
+        const HINGE_WIDTH = 0.02;   // transition zone width in paper units
+        const influence = 1.0 / (1.0 + Math.exp(-HINGE_SHARPNESS * (perp - HINGE_WIDTH)));
+
+        // Full fold angle for vertices on the fold side
         const angle = foldSign * maxAngle * influence;
 
         // Nearest point on crease to this vertex
@@ -85,19 +92,17 @@ const FoldEngine = (() => {
         const relY = vy - crPy;
 
         // Rodrigues' rotation around crease axis (ux, uy, 0):
-        // k×v where k=(ux,uy,0), v=(relX,relY,0)
         const kxvZ = ux * relY - uy * relX;
-        // k×(k×v) = (uy*kxvZ, -ux*kxvZ, 0)
         const kkxvX = uy * kxvZ;
         const kkxvY = -ux * kxvZ;
 
         const cosA = Math.cos(angle);
         const sinA = Math.sin(angle);
 
-        // Delta = rotated - original, scaled by influence
-        delta[i * 3]     = ((1 - cosA) * kkxvX) * influence;             // dx
-        delta[i * 3 + 1] = ((1 - cosA) * kkxvY) * influence;             // dy
-        delta[i * 3 + 2] = (sinA * kxvZ) * influence;                     // dz (main lift)
+        // Delta from rotation — NO extra influence scaling (angle handles it)
+        delta[i * 3]     = (1 - cosA) * kkxvX;    // dx
+        delta[i * 3 + 1] = (1 - cosA) * kkxvY;    // dy
+        delta[i * 3 + 2] = sinA * kxvZ;            // dz (main lift)
       }
       deltas.push(delta);
     }
