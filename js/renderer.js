@@ -67,7 +67,7 @@ const Renderer = (() => {
     foldGroup.add(paperFront);
 
     paperBack = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({
-      color: 0x888888, side: THREE.BackSide
+      color: 0xb0b0a8, side: THREE.BackSide
     }));
     foldGroup.add(paperBack);
 
@@ -157,13 +157,13 @@ const Renderer = (() => {
         var side = sides[s];
         var col, opacity;
         if (i < activeIdx) {
-          col = 0xaaaaaa; opacity = 0.3;
+          col = s === 0 ? 0xaaaaaa : 0x777777; opacity = 0.4;
         } else if (side.type === 'mountain') {
-          col = 0xcc3333; opacity = s === 0 ? 0.9 : 0.7; // slightly fainter on back
+          col = s === 0 ? 0xcc3333 : 0xff4444; opacity = 1.0; // brighter on back
         } else if (side.type === 'valley') {
-          col = 0x3366cc; opacity = s === 0 ? 0.9 : 0.7;
+          col = s === 0 ? 0x3366cc : 0x4488ff; opacity = 1.0;
         } else {
-          col = 0x6699cc; opacity = 0.5;
+          col = 0x6699cc; opacity = 0.6;
         }
 
         var material = new THREE.LineDashedMaterial({
