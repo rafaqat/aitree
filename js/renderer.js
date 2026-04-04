@@ -151,35 +151,45 @@ const Renderer = (() => {
 
     for (let i = 0; i < lines.length; i++) {
       const step = lines[i];
-      // Color: upcoming folds are colored, completed are subtle gray
-      let col, opacity;
-      if (i < activeIdx) {
-        col = 0xaaaaaa; opacity = 0.3; // completed — faded
-      } else if (step.type === 'mountain') {
-        col = 0xcc3333; opacity = 0.9; // red dashed
-      } else if (step.type === 'valley') {
-        col = 0x3366cc; opacity = 0.9; // blue
-      } else {
-        col = 0x6699cc; opacity = 0.5; // axial
-      }
 
-      const material = new THREE.LineDashedMaterial({
-        color: col,
-        transparent: true,
-        opacity: opacity,
-        dashSize: step.type === 'mountain' ? 0.06 : 0.04,
-        gapSize: step.type === 'mountain' ? 0.03 : 0.02,
-        linewidth: 1
-      });
-
-      const pts = [
-        new THREE.Vector3((step.line.x1 - 0.5) * 2, 0.005, (step.line.y1 - 0.5) * 2),
-        new THREE.Vector3((step.line.x2 - 0.5) * 2, 0.005, (step.line.y2 - 0.5) * 2)
+      // Front side: mountain=red, valley=blue
+      // Back side: swapped (mountain becomes valley from behind, vice versa)
+      var sides = [
+        { yOff:  0.005, type: step.type },          // front
+        { yOff: -0.005, type: step.type === 'mountain' ? 'valley' : step.type === 'valley' ? 'mountain' : step.type }  // back (swapped)
       ];
-      const geo = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(geo, material);
-      line.computeLineDistances();
-      creaseLinesGroup.add(line);
+
+      for (var s = 0; s < sides.length; s++) {
+        var side = sides[s];
+        var col, opacity;
+        if (i < activeIdx) {
+          col = 0xaaaaaa; opacity = 0.3;
+        } else if (side.type === 'mountain') {
+          col = 0xcc3333; opacity = s === 0 ? 0.9 : 0.7; // slightly fainter on back
+        } else if (side.type === 'valley') {
+          col = 0x3366cc; opacity = s === 0 ? 0.9 : 0.7;
+        } else {
+          col = 0x6699cc; opacity = 0.5;
+        }
+
+        var material = new THREE.LineDashedMaterial({
+          color: col,
+          transparent: true,
+          opacity: opacity,
+          dashSize: side.type === 'mountain' ? 0.06 : 0.04,
+          gapSize: side.type === 'mountain' ? 0.03 : 0.02,
+          linewidth: 1
+        });
+
+        var pts = [
+          new THREE.Vector3((step.line.x1 - 0.5) * 2, side.yOff, (step.line.y1 - 0.5) * 2),
+          new THREE.Vector3((step.line.x2 - 0.5) * 2, side.yOff, (step.line.y2 - 0.5) * 2)
+        ];
+        var geo = new THREE.BufferGeometry().setFromPoints(pts);
+        var line = new THREE.Line(geo, material);
+        line.computeLineDistances();
+        creaseLinesGroup.add(line);
+      }
     }
   }
 
