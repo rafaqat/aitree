@@ -2,3 +2,5 @@ node_modules/
 .DS_Store
 *.swp
 *.swo
+screenshot-*.png
+.playwright-mcp/

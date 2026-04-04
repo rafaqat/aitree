@@ -1,0 +1,135 @@
+/* ── Reset ──────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--surface:#111;--s2:#181818;--s3:#222;
+  --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.14);
+  --t1:#e8e8e8;--t2:#888;--t3:#464646;
+  --acc:#c8f0a0;--acc2:#a0d4f0;--acc3:#f0c8a0;
+  --mtn:#f07070;--vly:#6090f0;--axial:#80c0f0;
+  --radius:3px;
+}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--t1);
+  font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+
+/* ── Header ────────────────────────────────── */
+#hdr{display:flex;align-items:baseline;gap:10px;padding:8px 14px;
+  background:var(--surface);border-bottom:1px solid var(--b1)}
+#hdr h1{font:600 12px/1 monospace;color:var(--acc);letter-spacing:.1em;text-transform:uppercase}
+#hdr .sub{font:10px/1 monospace;color:var(--t3)}
+
+/* ── 3-Panel Layout ────────────────────────── */
+#app{display:flex;height:calc(100vh - 33px)}
+.panel{display:flex;flex-direction:column;overflow:hidden}
+#left{width:280px;min-width:280px;background:var(--surface);border-right:1px solid var(--b1);z-index:10}
+#center{flex:1;position:relative;background:#05050a}
+#right{width:240px;min-width:240px;background:var(--surface);border-left:1px solid var(--b1);
+  overflow-y:auto;z-index:10}
+
+/* ── Left Panel Header ────────────────────── */
+.ph{display:flex;align-items:center;justify-content:space-between;gap:6px;
+  padding:8px 12px;border-bottom:1px solid var(--b1)}
+.mode-toggle{display:flex;gap:2px}
+.mtb{background:var(--s2);border:1px solid var(--b1);color:var(--t2);
+  font:10px monospace;padding:4px 10px;cursor:pointer;border-radius:var(--radius);transition:all .15s}
+.mtb:hover{color:var(--t1);border-color:var(--b2)}
+.mtb.active{color:var(--acc);border-color:var(--acc);background:rgba(200,240,160,.05)}
+
+#preset-select{background:var(--s2);color:var(--t2);border:1px solid var(--b1);
+  border-radius:var(--radius);padding:3px 6px;font:10px monospace;cursor:pointer}
+
+/* ── Toolbars ──────────────────────────────── */
+.toolbar{display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;border-bottom:1px solid var(--b1)}
+.tb{display:flex;align-items:center;gap:4px;background:var(--s2);border:1px solid var(--b1);
+  color:var(--t2);font:10px monospace;padding:4px 8px;cursor:pointer;
+  border-radius:var(--radius);transition:all .15s}
+.tb:hover{color:var(--t1);border-color:var(--b2)}
+.tb.active{color:var(--acc);border-color:var(--acc);background:rgba(200,240,160,.05)}
+.tb.red:hover{border-color:var(--mtn);color:var(--mtn)}
+.tb.accent{border-color:var(--acc2);color:var(--acc2)}
+.tb.accent:hover{background:rgba(160,212,240,.08)}
+
+.sw{display:inline-block;width:8px;height:8px;border-radius:2px}
+.sw.mtn{background:var(--mtn)}
+.sw.vly{background:var(--vly)}
+
+/* ── Canvas Area ───────────────────────────── */
+#canvas-wrap{flex:1;position:relative;overflow:hidden;background:#080808}
+#draw-canvas,#tree-canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block}
+
+.panel-foot{display:flex;justify-content:space-between;padding:4px 10px;
+  font:9px monospace;color:var(--t3);border-top:1px solid var(--b1);background:var(--surface)}
+
+/* ── Viewport ──────────────────────────────── */
+#vp{position:relative;width:100%;height:100%}
+#gl{display:block;width:100%;height:100%}
+.vp-label{position:absolute;top:10px;left:14px;font:9px monospace;color:var(--t3);
+  letter-spacing:.1em;text-transform:uppercase;pointer-events:none}
+#step-overlay{position:absolute;bottom:14px;left:0;right:0;text-align:center;
+  font:11px monospace;color:var(--acc);pointer-events:none;letter-spacing:.05em;min-height:18px}
+#empty-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}
+#empty-msg p{font:11px monospace;color:var(--t3);line-height:1.8}
+
+/* ── Right Panel Sections ──────────────────── */
+.rsec{padding:10px 12px;border-bottom:1px solid var(--b1)}
+.slabel{font:9px monospace;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.slider-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.slider-row .slabel{margin-bottom:0}
+.slider-row span:last-child{font:11px monospace;color:var(--acc)}
+
+input[type=range]{width:100%;-webkit-appearance:none;height:2px;background:var(--s3);
+  border-radius:1px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;
+  border-radius:50%;background:var(--acc);cursor:pointer}
+
+/* ── Step List ─────────────────────────────── */
+#step-list{max-height:140px;overflow-y:auto}
+#step-list::-webkit-scrollbar{width:2px}
+#step-list::-webkit-scrollbar-thumb{background:var(--s3)}
+
+.step-item{display:flex;align-items:center;gap:6px;padding:4px 0;
+  font:10px monospace;color:var(--t3);border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer}
+.step-item:hover{color:var(--t2)}
+.step-item.active{color:var(--acc)}
+.step-item.done{color:var(--t2)}
+
+.step-dot{width:6px;height:6px;border-radius:50%;background:var(--t3);flex-shrink:0}
+.step-item.active .step-dot{background:var(--acc)}
+.step-item.done .step-dot{background:rgba(200,240,160,.35)}
+
+.step-badge{display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:50%;font:bold 9px monospace;flex-shrink:0}
+.step-badge.mountain{background:var(--mtn);color:#fff}
+.step-badge.valley{background:var(--vly);color:#fff}
+.step-badge.axial{background:var(--axial);color:#000}
+
+/* ── Transport ─────────────────────────────── */
+.transport{display:flex;gap:4px;justify-content:center}
+.transport button{flex:1;background:var(--s2);border:1px solid var(--b1);color:var(--t2);
+  font:10px monospace;padding:6px 4px;cursor:pointer;border-radius:var(--radius);
+  transition:all .15s;text-align:center}
+.transport button:hover{border-color:var(--acc);color:var(--acc)}
+.transport button.on{border-color:var(--acc);color:var(--acc);background:rgba(200,240,160,.05)}
+
+/* ── Buttons ───────────────────────────────── */
+.bbtn{width:100%;padding:6px;background:transparent;border:1px solid var(--b2);color:var(--t2);
+  font:10px monospace;cursor:pointer;border-radius:var(--radius);margin-top:5px;
+  transition:all .15s;letter-spacing:.04em}
+.bbtn:hover{border-color:var(--acc);color:var(--acc);background:rgba(200,240,160,.04)}
+.bbtn.on{border-color:var(--acc);color:var(--acc);background:rgba(200,240,160,.07)}
+
+/* ── Stats Grid ────────────────────────────── */
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.sc{background:var(--s2);border-radius:var(--radius);padding:6px 8px}
+.sc .sl{font:8px monospace;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px}
+.sc .sv{font:600 14px monospace;color:var(--t1)}
+
+/* ── Validation Dots ───────────────────────── */
+.vrow{display:flex;align-items:center;gap:7px;padding:3px 0;font:10px monospace;color:var(--t2)}
+.vdot{width:6px;height:6px;border-radius:50%;background:var(--t3);flex-shrink:0;transition:background .3s}
+.vdot.pass{background:var(--acc)}
+.vdot.fail{background:var(--mtn)}
+.vdot.warn{background:var(--acc3)}
+
+/* ── Scrollbar ─────────────────────────────── */
+#right::-webkit-scrollbar{width:3px}
+#right::-webkit-scrollbar-thumb{background:var(--s3);border-radius:2px}

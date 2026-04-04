@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Origami Designer &mdash; 3D Fold Animator</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header id="hdr">
+    <h1>Origami Designer</h1>
+    <span class="sub">3D Fold Animator &middot; inspired by Lang&rsquo;s TreeMaker</span>
+  </header>
+
+  <main id="app">
+    <!-- ── LEFT PANEL ─────────────────────────── -->
+    <section id="left" class="panel">
+      <div class="ph">
+        <div class="mode-toggle">
+          <button class="mtb active" id="mode-draw">Draw</button>
+          <button class="mtb" id="mode-tree">Tree</button>
+        </div>
+        <select id="preset-select">
+          <option value="">-- Preset --</option>
+        </select>
+      </div>
+
+      <!-- Draw mode toolbar -->
+      <div id="draw-toolbar" class="toolbar">
+        <button class="tb active" data-tool="mountain"><span class="sw mtn"></span>Mountain</button>
+        <button class="tb" data-tool="valley"><span class="sw vly"></span>Valley</button>
+        <button class="tb" data-tool="select">Select</button>
+        <button class="tb" data-tool="delete">Delete</button>
+      </div>
+
+      <!-- Tree mode toolbar -->
+      <div id="tree-toolbar" class="toolbar" style="display:none">
+        <button class="tb active" data-tmode="add">+ Add</button>
+        <button class="tb" data-tmode="edge">~ Edge</button>
+        <button class="tb" data-tmode="move">Move</button>
+        <button class="tb red" id="btn-clear-tree">Clear</button>
+        <button class="tb accent" id="btn-compute">Compute</button>
+      </div>
+
+      <div id="canvas-wrap">
+        <canvas id="draw-canvas"></canvas>
+        <canvas id="tree-canvas" style="display:none"></canvas>
+      </div>
+
+      <div class="panel-foot">
+        <span id="snap-info">Snap: off</span>
+        <span id="coord-info">--</span>
+      </div>
+    </section>
+
+    <!-- ── CENTER PANEL ───────────────────────── -->
+    <section id="center" class="panel">
+      <div id="vp">
+        <canvas id="gl"></canvas>
+        <div class="vp-label">3D Fold &middot; drag=orbit &middot; scroll=zoom</div>
+        <div id="step-overlay"></div>
+        <div id="empty-msg"><p>select a preset or draw<br>fold lines to begin</p></div>
+      </div>
+    </section>
+
+    <!-- ── RIGHT PANEL ────────────────────────── -->
+    <section id="right" class="panel">
+      <div class="rsec">
+        <div class="slabel">Fold Sequence</div>
+        <div id="step-list"></div>
+      </div>
+
+      <div class="rsec transport">
+        <button id="btn-prev">Prev</button>
+        <button id="btn-play">Play</button>
+        <button id="btn-next">Next</button>
+      </div>
+
+      <div class="rsec">
+        <div class="slider-row">
+          <span class="slabel">Timeline</span>
+          <span id="pct">0%</span>
+        </div>
+        <input type="range" id="timeline" min="0" max="1000" value="0">
+      </div>
+
+      <div class="rsec">
+        <div class="slider-row">
+          <span class="slabel">Speed</span>
+          <span id="spd-val">1.0x</span>
+        </div>
+        <input type="range" id="speed" min="1" max="10" value="5">
+      </div>
+
+      <div class="rsec">
+        <div class="slabel">View</div>
+        <button class="bbtn" id="btn-wf">Wireframe</button>
+        <button class="bbtn" id="btn-cl">Crease Lines</button>
+        <button class="bbtn" id="btn-export">Export SVG</button>
+      </div>
+
+      <div class="rsec">
+        <div class="slabel">Stats</div>
+        <div class="sgrid">
+          <div class="sc"><div class="sl">Nodes</div><div class="sv" id="s-nodes">0</div></div>
+          <div class="sc"><div class="sl">Disks</div><div class="sv" id="s-disks">0</div></div>
+          <div class="sc"><div class="sl">Creases</div><div class="sv" id="s-creases">0</div></div>
+          <div class="sc"><div class="sl">Steps</div><div class="sv" id="s-steps">0</div></div>
+        </div>
+      </div>
+
+      <div class="rsec">
+        <div class="slabel">Validation</div>
+        <div class="vrow"><div class="vdot" id="v-kawasaki"></div>Kawasaki theorem</div>
+        <div class="vrow"><div class="vdot" id="v-maekawa"></div>Maekawa theorem</div>
+        <div class="vrow"><div class="vdot" id="v-packing"></div>Disk packing</div>
+        <div class="vrow"><div class="vdot" id="v-tree"></div>Tree feasibility</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <!-- App modules (dependency order) -->
+  <script src="js/folder.js"></script>
+  <script src="js/validator.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/steps.js"></script>
+  <script src="js/presets.js"></script>
+  <script src="js/packing.js"></script>
+  <script src="js/treegraph.js"></script>
+  <script src="js/designer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
