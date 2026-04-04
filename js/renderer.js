@@ -67,7 +67,7 @@ const Renderer = (() => {
     foldGroup.add(paperFront);
 
     paperBack = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({
-      color: 0xb0b0a8, side: THREE.BackSide
+      color: 0xd0d0c8, side: THREE.BackSide
     }));
     foldGroup.add(paperBack);
 
@@ -157,22 +157,22 @@ const Renderer = (() => {
         var side = sides[s];
         var col, opacity;
         if (i < activeIdx) {
-          col = s === 0 ? 0xaaaaaa : 0x777777; opacity = 0.4;
+          col = s === 0 ? 0xaaaaaa : 0x666666; opacity = 0.5;
         } else if (side.type === 'mountain') {
-          col = s === 0 ? 0xcc3333 : 0xff4444; opacity = 1.0; // brighter on back
+          col = s === 0 ? 0xcc3333 : 0xff2222; opacity = 1.0;
         } else if (side.type === 'valley') {
-          col = s === 0 ? 0x3366cc : 0x4488ff; opacity = 1.0;
+          col = s === 0 ? 0x3366cc : 0x2266ff; opacity = 1.0;
         } else {
-          col = 0x6699cc; opacity = 0.6;
+          col = 0x6699cc; opacity = 0.7;
         }
 
         var material = new THREE.LineDashedMaterial({
           color: col,
           transparent: true,
           opacity: opacity,
-          dashSize: side.type === 'mountain' ? 0.06 : 0.04,
+          dashSize: side.type === 'mountain' ? 0.08 : 0.05,
           gapSize: side.type === 'mountain' ? 0.03 : 0.02,
-          linewidth: 1
+          linewidth: 2
         });
 
         var pts = [
