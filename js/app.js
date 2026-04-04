@@ -10,6 +10,10 @@
   let currentMode = 'draw'; // 'draw' | 'tree'
   let wfOn = false, clOn = true;
 
+  // Pre-computed fold data (cached when steps change)
+  var cachedDeltas = null;
+  var cachedFlat = null;
+
   // ── Boot ──────────────────────────────────
 
   window.addEventListener('DOMContentLoaded', function() {
@@ -71,7 +75,8 @@
     });
     Designer.setCreases(designerCreases);
 
-    // Update 3D
+    // Rebuild fold cache and update 3D
+    rebuildFoldCache();
     updateFold(0);
     updateCreaseLines(data.steps);
     Renderer.showEmpty(false);
@@ -238,6 +243,7 @@
       });
       StepSequencer.setSteps(steps);
       StepSequencer.renderStepList(document.getElementById('step-list'));
+      rebuildFoldCache();
       updateFold(0);
       updateCreaseLines(steps);
       runValidation(creases, [], null);
@@ -261,10 +267,22 @@
 
   // ── Core Update Functions ─────────────────
 
+  /**
+   * Rebuild cached deltas when steps change.
+   * Must be called whenever the step list is modified.
+   */
+  function rebuildFoldCache() {
+    var baseMesh = Renderer.getBaseMesh();
+    var steps = StepSequencer.getSteps();
+    cachedFlat = FoldEngine.buildFlatArray(baseMesh);
+    cachedDeltas = FoldEngine.precomputeDeltas(cachedFlat, steps);
+  }
+
   function updateFold(globalT) {
     var baseMesh = Renderer.getBaseMesh();
     var steps = StepSequencer.getSteps();
-    var folded = FoldEngine.computeFoldState(baseMesh, steps, globalT);
+    if (!cachedDeltas || !cachedFlat) rebuildFoldCache();
+    var folded = FoldEngine.computeFoldState(baseMesh, steps, globalT, cachedDeltas, cachedFlat);
     Renderer.updatePaper(folded);
   }
 
@@ -285,6 +303,7 @@
     // Load computed steps
     StepSequencer.setSteps(result.steps);
     StepSequencer.renderStepList(document.getElementById('step-list'));
+    rebuildFoldCache();
     updateFold(0);
     updateCreaseLines(result.steps);
     Renderer.showEmpty(result.steps.length === 0);
