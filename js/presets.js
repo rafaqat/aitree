@@ -1,18 +1,13 @@
 /**
  * presets.js — Preset origami models
  *
- * Each preset has:
- *   tree: {nodes, edges} — for tree graph mode (from prototype)
- *   steps: [...] — pre-computed fold steps in A-Z format
- *
- * Fold lines are on unit square [0,1]x[0,1].
- * Angles in degrees (180 = full fold).
+ * Each step is ONE fold: a single crease line, one rotation.
+ * foldAngle = Math.PI for a full flat fold (180 degrees).
+ * All fold lines are on the original flat unit square [0,1]x[0,1].
  */
 const Presets = (() => {
+  const PI = Math.PI;
 
-  // All fold lines in flat paper coordinates [0,1]x[0,1].
-  // foldAngle is in radians (used by soft-influence engine).
-  // Higher foldAngle = deeper fold. Typical values: 0.6 (gentle) to 2.8 (sharp).
   const DATA = {
     crane: {
       name: 'Crane',
@@ -24,31 +19,24 @@ const Presets = (() => {
         edges: [[0,1],[0,2],[0,3],[3,4],[3,5],[3,6]]
       },
       steps: [
-        // Preliminary base creases
-        {id:'A', label:'Valley fold diagonally', type:'valley',
-         line:{x1:0,y1:0,x2:1,y2:1}, foldAngle:2.6},
-        {id:'B', label:'Valley fold other diagonal', type:'valley',
-         line:{x1:1,y1:0,x2:0,y2:1}, foldAngle:2.6},
-        {id:'C', label:'Mountain fold vertically', type:'mountain',
-         line:{x1:0.5,y1:0,x2:0.5,y2:1}, foldAngle:2.4},
-        {id:'D', label:'Mountain fold horizontally', type:'mountain',
-         line:{x1:0,y1:0.5,x2:1,y2:0.5}, foldAngle:2.4},
-        // Kite folds — edges to center
-        {id:'E', label:'Kite fold left to center', type:'valley',
-         line:{x1:0.5,y1:0,x2:0,y2:0.5}, foldAngle:1.8},
-        {id:'F', label:'Kite fold right to center', type:'valley',
-         line:{x1:0.5,y1:0,x2:1,y2:0.5}, foldAngle:1.8},
-        // Neck and tail
-        {id:'G', label:'Reverse fold — neck', type:'mountain',
-         line:{x1:0,y1:0.5,x2:0.25,y2:1}, foldAngle:1.6},
-        {id:'H', label:'Reverse fold — tail', type:'mountain',
-         line:{x1:1,y1:0.5,x2:0.75,y2:1}, foldAngle:1.6},
-        // Head
-        {id:'I', label:'Reverse fold — head', type:'valley',
-         line:{x1:0,y1:0.75,x2:0.12,y2:1}, foldAngle:1.2},
-        // Wings
-        {id:'J', label:'Fold wings down', type:'valley',
-         line:{x1:0.25,y1:0.25,x2:0.75,y2:0.25}, foldAngle:1.0}
+        {id:'A', label:'Fold in half diagonally', type:'valley',
+         line:{x1:0,y1:0,x2:1,y2:1}, foldAngle:PI},
+        {id:'B', label:'Fold triangle in half', type:'valley',
+         line:{x1:1,y1:0,x2:0,y2:1}, foldAngle:PI},
+        {id:'C', label:'Fold left edge to center', type:'valley',
+         line:{x1:0.5,y1:0,x2:0,y2:0.5}, foldAngle:PI},
+        {id:'D', label:'Fold right edge to center', type:'valley',
+         line:{x1:0.5,y1:0,x2:1,y2:0.5}, foldAngle:PI},
+        {id:'E', label:'Fold bottom left up', type:'mountain',
+         line:{x1:0,y1:0.5,x2:0.5,y2:1}, foldAngle:PI},
+        {id:'F', label:'Fold bottom right up', type:'mountain',
+         line:{x1:0.5,y1:1,x2:1,y2:0.5}, foldAngle:PI},
+        {id:'G', label:'Narrow fold — neck', type:'mountain',
+         line:{x1:0,y1:0.7,x2:0.3,y2:1}, foldAngle:PI},
+        {id:'H', label:'Narrow fold — tail', type:'mountain',
+         line:{x1:0.7,y1:1,x2:1,y2:0.7}, foldAngle:PI},
+        {id:'I', label:'Fold head down', type:'valley',
+         line:{x1:0,y1:0.85,x2:0.15,y2:1}, foldAngle:PI * 0.6}
       ]
     },
 
@@ -62,16 +50,42 @@ const Presets = (() => {
         edges: [[0,1],[0,2],[1,3],[2,4]]
       },
       steps: [
-        {id:'A', label:'Valley fold in half', type:'valley',
-         line:{x1:0,y1:0.5,x2:1,y2:0.5}, foldAngle:2.8},
+        {id:'A', label:'Fold in half', type:'valley',
+         line:{x1:0,y1:0.5,x2:1,y2:0.5}, foldAngle:PI},
         {id:'B', label:'Fold left corner down', type:'valley',
-         line:{x1:0.5,y1:0,x2:0,y2:0.5}, foldAngle:2.4},
+         line:{x1:0.5,y1:0,x2:0,y2:0.5}, foldAngle:PI},
         {id:'C', label:'Fold right corner down', type:'valley',
-         line:{x1:0.5,y1:0,x2:1,y2:0.5}, foldAngle:2.4},
-        {id:'D', label:'Fold bottom strip up', type:'valley',
-         line:{x1:0,y1:0.75,x2:1,y2:0.75}, foldAngle:2.0},
-        {id:'E', label:'Open hull', type:'mountain',
-         line:{x1:0.5,y1:0,x2:0.5,y2:1}, foldAngle:1.4}
+         line:{x1:0.5,y1:0,x2:1,y2:0.5}, foldAngle:PI},
+        {id:'D', label:'Fold bottom edge up', type:'valley',
+         line:{x1:0,y1:0.75,x2:1,y2:0.75}, foldAngle:PI},
+        {id:'E', label:'Fold left flap in', type:'mountain',
+         line:{x1:0.15,y1:0.5,x2:0,y2:0.75}, foldAngle:PI},
+        {id:'F', label:'Fold right flap in', type:'mountain',
+         line:{x1:0.85,y1:0.5,x2:1,y2:0.75}, foldAngle:PI}
+      ]
+    },
+
+    airplane: {
+      name: 'Paper Airplane',
+      tree: {
+        nodes: [
+          {id:0,x:134,y:148,r:10},{id:1,x:134,y:40,r:20},{id:2,x:134,y:260,r:20}
+        ],
+        edges: [[0,1],[0,2]]
+      },
+      steps: [
+        {id:'A', label:'Fold in half vertically', type:'valley',
+         line:{x1:0.5,y1:0,x2:0.5,y2:1}, foldAngle:PI},
+        {id:'B', label:'Fold top-left corner to center', type:'valley',
+         line:{x1:0,y1:0,x2:0.5,y2:0.3}, foldAngle:PI},
+        {id:'C', label:'Fold top-right corner to center', type:'valley',
+         line:{x1:1,y1:0,x2:0.5,y2:0.3}, foldAngle:PI},
+        {id:'D', label:'Fold left wing down', type:'valley',
+         line:{x1:0.15,y1:0,x2:0.3,y2:1}, foldAngle:PI},
+        {id:'E', label:'Fold right wing down', type:'valley',
+         line:{x1:0.85,y1:0,x2:0.7,y2:1}, foldAngle:PI},
+        {id:'F', label:'Fold left winglet up', type:'mountain',
+         line:{x1:0.05,y1:0.3,x2:0.2,y2:1}, foldAngle:PI * 0.5}
       ]
     },
 
@@ -86,17 +100,17 @@ const Presets = (() => {
       },
       steps: [
         {id:'A', label:'Fold top-left corner to center', type:'valley',
-         line:{x1:0,y1:0.5,x2:0.5,y2:0}, foldAngle:2.4},
+         line:{x1:0,y1:0.5,x2:0.5,y2:0}, foldAngle:PI},
         {id:'B', label:'Fold top-right corner to center', type:'valley',
-         line:{x1:0.5,y1:0,x2:1,y2:0.5}, foldAngle:2.4},
+         line:{x1:0.5,y1:0,x2:1,y2:0.5}, foldAngle:PI},
         {id:'C', label:'Fold bottom-right corner to center', type:'valley',
-         line:{x1:1,y1:0.5,x2:0.5,y2:1}, foldAngle:2.4},
+         line:{x1:1,y1:0.5,x2:0.5,y2:1}, foldAngle:PI},
         {id:'D', label:'Fold bottom-left corner to center', type:'valley',
-         line:{x1:0.5,y1:1,x2:0,y2:0.5}, foldAngle:2.4},
-        {id:'E', label:'Valley fold in half', type:'valley',
-         line:{x1:0,y1:0.5,x2:1,y2:0.5}, foldAngle:1.8},
-        {id:'F', label:'Valley fold in half again', type:'valley',
-         line:{x1:0.5,y1:0,x2:0.5,y2:1}, foldAngle:1.8}
+         line:{x1:0.5,y1:1,x2:0,y2:0.5}, foldAngle:PI},
+        {id:'E', label:'Fold in half', type:'valley',
+         line:{x1:0,y1:0.5,x2:1,y2:0.5}, foldAngle:PI},
+        {id:'F', label:'Fold in half again', type:'valley',
+         line:{x1:0.5,y1:0,x2:0.5,y2:1}, foldAngle:PI}
       ]
     },
 
@@ -111,19 +125,15 @@ const Presets = (() => {
       },
       steps: [
         {id:'A', label:'Fold top-left edge to diagonal', type:'valley',
-         line:{x1:0,y1:0,x2:0.5,y2:0.5}, foldAngle:2.6},
+         line:{x1:0,y1:0,x2:0.5,y2:0.5}, foldAngle:PI},
         {id:'B', label:'Fold bottom-left edge to diagonal', type:'valley',
-         line:{x1:0,y1:1,x2:0.5,y2:0.5}, foldAngle:2.6},
-        {id:'C', label:'Fold top-right edge to diagonal', type:'valley',
-         line:{x1:1,y1:0,x2:0.5,y2:0.5}, foldAngle:2.6},
-        {id:'D', label:'Fold bottom-right edge to diagonal', type:'valley',
-         line:{x1:1,y1:1,x2:0.5,y2:0.5}, foldAngle:2.6},
-        {id:'E', label:'Mountain fold in half', type:'mountain',
-         line:{x1:0,y1:0,x2:1,y2:1}, foldAngle:2.0},
-        {id:'F', label:'Fold tail fin', type:'valley',
-         line:{x1:0.75,y1:0.75,x2:1,y2:0.5}, foldAngle:1.4},
-        {id:'G', label:'Shape head', type:'mountain',
-         line:{x1:0,y1:0.25,x2:0.25,y2:0}, foldAngle:1.0}
+         line:{x1:0,y1:1,x2:0.5,y2:0.5}, foldAngle:PI},
+        {id:'C', label:'Fold in half', type:'mountain',
+         line:{x1:0,y1:0,x2:1,y2:1}, foldAngle:PI},
+        {id:'D', label:'Fold top-right to diagonal', type:'valley',
+         line:{x1:1,y1:0,x2:0.5,y2:0.5}, foldAngle:PI},
+        {id:'E', label:'Fold tail up', type:'valley',
+         line:{x1:0.7,y1:0.7,x2:1,y2:0.4}, foldAngle:PI * 0.7}
       ]
     },
 
@@ -137,22 +147,22 @@ const Presets = (() => {
         edges: [[0,1],[0,2],[0,3],[0,4],[0,5]]
       },
       steps: [
-        {id:'A', label:'Valley fold diagonal', type:'valley',
-         line:{x1:0,y1:0,x2:1,y2:1}, foldAngle:2.6},
-        {id:'B', label:'Valley fold other diagonal', type:'valley',
-         line:{x1:1,y1:0,x2:0,y2:1}, foldAngle:2.6},
-        {id:'C', label:'Mountain fold horizontally', type:'mountain',
-         line:{x1:0,y1:0.5,x2:1,y2:0.5}, foldAngle:2.4},
-        {id:'D', label:'Mountain fold vertically', type:'mountain',
-         line:{x1:0.5,y1:0,x2:0.5,y2:1}, foldAngle:2.4},
+        {id:'A', label:'Fold in half horizontally', type:'valley',
+         line:{x1:0,y1:0.5,x2:1,y2:0.5}, foldAngle:PI},
+        {id:'B', label:'Fold in half vertically', type:'valley',
+         line:{x1:0.5,y1:0,x2:0.5,y2:1}, foldAngle:PI},
+        {id:'C', label:'Fold diagonally', type:'mountain',
+         line:{x1:0,y1:0,x2:1,y2:1}, foldAngle:PI},
+        {id:'D', label:'Fold other diagonal', type:'mountain',
+         line:{x1:1,y1:0,x2:0,y2:1}, foldAngle:PI},
         {id:'E', label:'Fold left flap up', type:'valley',
-         line:{x1:0,y1:1,x2:0.5,y2:0.5}, foldAngle:1.8},
+         line:{x1:0,y1:1,x2:0.5,y2:0.5}, foldAngle:PI},
         {id:'F', label:'Fold right flap up', type:'valley',
-         line:{x1:1,y1:1,x2:0.5,y2:0.5}, foldAngle:1.8},
+         line:{x1:1,y1:1,x2:0.5,y2:0.5}, foldAngle:PI},
         {id:'G', label:'Tuck left corner', type:'mountain',
-         line:{x1:0.25,y1:0.5,x2:0.5,y2:0.75}, foldAngle:1.2},
+         line:{x1:0.25,y1:0.5,x2:0.5,y2:0.75}, foldAngle:PI * 0.7},
         {id:'H', label:'Tuck right corner', type:'mountain',
-         line:{x1:0.75,y1:0.5,x2:0.5,y2:0.75}, foldAngle:1.2}
+         line:{x1:0.75,y1:0.5,x2:0.5,y2:0.75}, foldAngle:PI * 0.7}
       ]
     },
 
@@ -168,26 +178,22 @@ const Presets = (() => {
         edges: [[0,1],[0,2],[0,3],[0,4],[0,5],[0,6],[0,7],[0,8]]
       },
       steps: [
-        {id:'A', label:'Valley fold diagonal', type:'valley',
-         line:{x1:0,y1:0,x2:1,y2:1}, foldAngle:2.6},
-        {id:'B', label:'Valley fold other diagonal', type:'valley',
-         line:{x1:1,y1:0,x2:0,y2:1}, foldAngle:2.6},
-        {id:'C', label:'Mountain fold horizontally', type:'mountain',
-         line:{x1:0,y1:0.5,x2:1,y2:0.5}, foldAngle:2.4},
-        {id:'D', label:'Mountain fold vertically', type:'mountain',
-         line:{x1:0.5,y1:0,x2:0.5,y2:1}, foldAngle:2.4},
-        {id:'E', label:'Kite fold left', type:'valley',
-         line:{x1:0,y1:0,x2:0.5,y2:0.5}, foldAngle:1.6},
-        {id:'F', label:'Kite fold right', type:'valley',
-         line:{x1:1,y1:0,x2:0.5,y2:0.5}, foldAngle:1.6},
-        {id:'G', label:'Kite fold bottom-left', type:'valley',
-         line:{x1:0,y1:1,x2:0.5,y2:0.5}, foldAngle:1.6},
-        {id:'H', label:'Kite fold bottom-right', type:'valley',
-         line:{x1:1,y1:1,x2:0.5,y2:0.5}, foldAngle:1.6},
-        {id:'I', label:'Fold front legs out', type:'mountain',
-         line:{x1:0.25,y1:0,x2:0.5,y2:0.25}, foldAngle:1.2},
-        {id:'J', label:'Fold back legs out', type:'mountain',
-         line:{x1:0.25,y1:1,x2:0.5,y2:0.75}, foldAngle:1.2}
+        {id:'A', label:'Fold in half diagonally', type:'valley',
+         line:{x1:0,y1:0,x2:1,y2:1}, foldAngle:PI},
+        {id:'B', label:'Fold other diagonal', type:'valley',
+         line:{x1:1,y1:0,x2:0,y2:1}, foldAngle:PI},
+        {id:'C', label:'Fold horizontally', type:'mountain',
+         line:{x1:0,y1:0.5,x2:1,y2:0.5}, foldAngle:PI},
+        {id:'D', label:'Fold vertically', type:'mountain',
+         line:{x1:0.5,y1:0,x2:0.5,y2:1}, foldAngle:PI},
+        {id:'E', label:'Fold left edge to center', type:'valley',
+         line:{x1:0,y1:0,x2:0.5,y2:0.5}, foldAngle:PI * 0.6},
+        {id:'F', label:'Fold right edge to center', type:'valley',
+         line:{x1:1,y1:0,x2:0.5,y2:0.5}, foldAngle:PI * 0.6},
+        {id:'G', label:'Fold bottom-left to center', type:'valley',
+         line:{x1:0,y1:1,x2:0.5,y2:0.5}, foldAngle:PI * 0.6},
+        {id:'H', label:'Fold bottom-right to center', type:'valley',
+         line:{x1:1,y1:1,x2:0.5,y2:0.5}, foldAngle:PI * 0.6}
       ]
     }
   };
