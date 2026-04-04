@@ -69,20 +69,16 @@ const FoldEngine = (() => {
         const along = pvx * ux + pvy * uy; // distance along crease
         const perp = pvx * nx + pvy * ny;  // signed distance from crease
 
-        if (Math.abs(perp) < 0.0005) {
+        // Hard step: vertices on one side rotate fully, other side stays put.
+        // Only vertices exactly on the crease line (within tiny epsilon) don't move.
+        // This produces perfectly flat panels with a sharp crease hinge.
+        const EPS = 0.001;
+        if (Math.abs(perp) < EPS) {
           delta[i * 3] = 0; delta[i * 3 + 1] = 0; delta[i * 3 + 2] = 0;
           continue;
         }
 
-        // Steep sigmoid: flat panels with sharp hinge at the crease.
-        // Vertices on the positive side get full rotation (influence → 1.0),
-        // vertices on negative side stay put (influence → 0.0),
-        // with a narrow smooth transition at the crease itself.
-        const HINGE_SHARPNESS = 60; // higher = sharper crease
-        const HINGE_WIDTH = 0.02;   // transition zone width in paper units
-        const influence = 1.0 / (1.0 + Math.exp(-HINGE_SHARPNESS * (perp - HINGE_WIDTH)));
-
-        // Full fold angle for vertices on the fold side
+        const influence = perp > 0 ? 1.0 : 0.0;
         const angle = foldSign * maxAngle * influence;
 
         // Nearest point on crease to this vertex
