@@ -1,18 +1,23 @@
 /**
- * folder.js — Soft-influence fold engine (ported from prototype)
+ * folder.js — Sequential rigid-hinge fold engine
  *
- * Pre-computes per-vertex displacement deltas for each fold step using
- * Rodrigues' rotation with exponential falloff. During animation, starts
- * from flat and accumulates weighted deltas additively.
+ * Each fold step:
+ * 1. Classifies vertices using ORIGINAL flat 2D positions (which side of fold line)
+ * 2. Rotates the moving side in 3D around the fold line axis
+ * 3. Next step operates on the already-folded result
  *
- * This produces smooth, organic-looking folds that approximate real paper
- * without needing to track layers.
+ * This produces flat panels with sharp creases, folded one at a time.
  */
 const FoldEngine = (() => {
 
+  /** Cross-product sign: >0 one side, <0 other side */
+  function sideOfLine(px, pz, x1, z1, x2, z2) {
+    return (x2 - x1) * (pz - z1) - (z2 - z1) * (px - x1);
+  }
+
   /**
    * Generate subdivided grid mesh for unit square [0,1]x[0,1].
-   * Vertices on XZ plane (y=0), stored as flat Float32Array for perf.
+   * Vertices on XZ plane (y=0).
    */
   function createPaperMesh(subdivisions) {
     subdivisions = subdivisions || 40;
@@ -27,161 +32,98 @@ const FoldEngine = (() => {
   }
 
   /**
-   * Pre-compute per-vertex displacement deltas for a set of fold steps.
-   *
-   * Each step's crease line acts as a hinge. Vertices near the crease fold
-   * sharply; far vertices fold gently (exponential falloff).
-   *
-   * Uses Rodrigues' rotation formula around the crease axis.
-   *
-   * flatPositions: Float32Array [x,y,z, x,y,z, ...] — flat paper positions
-   * steps: array of { line:{x1,y1,x2,y2}, type, angle, foldAngle }
-   *
-   * Returns array of Float32Array deltas, one per step.
+   * Rotate a 3D point around an axis line (Rodrigues' formula).
+   * p: point {x,y,z}
+   * pivot: point on the axis {x,y,z}
+   * axis: normalized direction {x,y,z}
+   * angle: radians
    */
-  function precomputeDeltas(flatPositions, steps) {
-    const nV = flatPositions.length / 3;
-    const deltas = [];
-
-    for (let si = 0; si < steps.length; si++) {
-      const step = steps[si];
-      const line = step.line;
-      const delta = new Float32Array(nV * 3);
-
-      // Crease line direction
-      const ax = line.x2 - line.x1;
-      const ay = line.y2 - line.y1;
-      const len = Math.sqrt(ax * ax + ay * ay) || 1;
-      const ux = ax / len, uy = ay / len; // unit along crease
-      const nx = -uy, ny = ux;            // normal to crease (in plane)
-
-      const foldSign = step.type === 'mountain' ? 1 : -1;
-      // Use foldAngle (radians) if provided, otherwise convert degrees to radians
-      const maxAngle = step.foldAngle || ((step.angle || 180) * Math.PI / 180);
-
-      for (let i = 0; i < nV; i++) {
-        const vx = flatPositions[i * 3];
-        const vy = flatPositions[i * 3 + 1];
-
-        // Project vertex relative to crease start point
-        const pvx = vx - line.x1;
-        const pvy = vy - line.y1;
-        const along = pvx * ux + pvy * uy; // distance along crease
-        const perp = pvx * nx + pvy * ny;  // signed distance from crease
-
-        // Hard step: vertices on one side rotate fully, other side stays put.
-        // Only vertices exactly on the crease line (within tiny epsilon) don't move.
-        // This produces perfectly flat panels with a sharp crease hinge.
-        const EPS = 0.001;
-        if (Math.abs(perp) < EPS) {
-          delta[i * 3] = 0; delta[i * 3 + 1] = 0; delta[i * 3 + 2] = 0;
-          continue;
-        }
-
-        const influence = perp > 0 ? 1.0 : 0.0;
-        const angle = foldSign * maxAngle * influence;
-
-        // Nearest point on crease to this vertex
-        const crPx = line.x1 + along * ux;
-        const crPy = line.y1 + along * uy;
-        const relX = vx - crPx;
-        const relY = vy - crPy;
-
-        // Rodrigues' rotation around crease axis (ux, uy, 0):
-        const kxvZ = ux * relY - uy * relX;
-        const kkxvX = uy * kxvZ;
-        const kkxvY = -ux * kxvZ;
-
-        const cosA = Math.cos(angle);
-        const sinA = Math.sin(angle);
-
-        // Delta from rotation — NO extra influence scaling (angle handles it)
-        delta[i * 3]     = (1 - cosA) * kkxvX;    // dx
-        delta[i * 3 + 1] = (1 - cosA) * kkxvY;    // dy
-        delta[i * 3 + 2] = sinA * kxvZ;            // dz (main lift)
-      }
-      deltas.push(delta);
-    }
-    return deltas;
+  function rotateAroundAxis(p, pivot, axis, angle) {
+    const c = Math.cos(angle), s = Math.sin(angle);
+    // Translate to pivot
+    const rx = p.x - pivot.x, ry = p.y - pivot.y, rz = p.z - pivot.z;
+    // Rodrigues: v*cos + (k×v)*sin + k*(k·v)*(1-cos)
+    const dot = axis.x * rx + axis.y * ry + axis.z * rz;
+    const cx = axis.y * rz - axis.z * ry;
+    const cy = axis.z * rx - axis.x * rz;
+    const cz = axis.x * ry - axis.y * rx;
+    return {
+      x: pivot.x + rx * c + cx * s + axis.x * dot * (1 - c),
+      y: pivot.y + ry * c + cy * s + axis.y * dot * (1 - c),
+      z: pivot.z + rz * c + cz * s + axis.z * dot * (1 - c)
+    };
   }
 
   /**
-   * Build flat position array from paper mesh vertices.
-   * Maps unit-square coords to PlaneGeometry coords (centered, size 2).
+   * Apply a single fold step to current 3D positions.
+   * Uses original flat positions for side classification.
+   * Rotates one side around the fold line in 3D.
    */
-  function buildFlatArray(baseMesh) {
-    const verts = baseMesh.vertices;
-    const flat = new Float32Array(verts.length * 3);
-    for (let i = 0; i < verts.length; i++) {
-      flat[i * 3]     = (verts[i].x - 0.5) * 2;
-      flat[i * 3 + 1] = (verts[i].z - 0.5) * 2; // z maps to y in PlaneGeometry
-      flat[i * 3 + 2] = 0;
-    }
-    return flat;
-  }
+  function applyFold(verts3D, flatVerts, step, progress) {
+    const line = step.line;
+    const maxAngle = step.foldAngle || ((step.angle || 180) * Math.PI / 180);
+    const sign = step.type === 'mountain' ? -1 : 1;
+    const angle = sign * maxAngle * progress;
 
-  /**
-   * Compute folded vertex positions at a given global progress.
-   *
-   * Starts from flat, accumulates each step's pre-computed delta
-   * weighted by its eased progress. This is additive, not sequential.
-   */
-  function computeFoldState(baseMesh, steps, globalProgress, deltas, flatPositions) {
-    const verts = baseMesh.vertices;
-    const nV = verts.length;
-    const result = new Array(nV);
+    // Fold line axis direction (in XZ plane, y=0)
+    const dx = line.x2 - line.x1;
+    const dz = line.y2 - line.y1;
+    const len = Math.sqrt(dx * dx + dz * dz) || 1;
+    const axis = { x: dx / len, y: 0, z: dz / len };
+    const pivot = { x: line.x1, y: 0, z: line.y1 };
 
-    if (!steps || !steps.length || !deltas || !flatPositions) {
-      for (let i = 0; i < nV; i++) {
-        result[i] = { x: verts[i].x, y: 0, z: verts[i].z };
+    const result = new Array(verts3D.length);
+    for (let i = 0; i < verts3D.length; i++) {
+      const flat = flatVerts[i];
+      const side = sideOfLine(flat.x, flat.z, line.x1, line.y1, line.x2, line.y2);
+
+      if (side < -0.001) {
+        // Rotate this vertex around the fold line
+        result[i] = rotateAroundAxis(verts3D[i], pivot, axis, angle);
+      } else {
+        result[i] = { x: verts3D[i].x, y: verts3D[i].y, z: verts3D[i].z };
       }
-      return result;
-    }
-
-    // Start from flat positions
-    const px = new Float32Array(nV);
-    const py = new Float32Array(nV);
-    const pz = new Float32Array(nV);
-    for (let i = 0; i < nV; i++) {
-      px[i] = flatPositions[i * 3];
-      py[i] = flatPositions[i * 3 + 1];
-      pz[i] = flatPositions[i * 3 + 2];
-    }
-
-    // Each step gets its own discrete slice — one fold at a time.
-    // Previous steps are fully applied (stepT=1), current step animates.
-    const count = steps.length;
-    const sliceW = 1 / count;
-
-    for (let si = 0; si < count; si++) {
-      const start = si * sliceW;
-      const end = (si + 1) * sliceW;
-
-      if (globalProgress <= start) break; // haven't reached this step yet
-
-      const raw = Math.min(1, (globalProgress - start) / (end - start));
-      const stepT = ease(raw);
-
-      const delta = deltas[si];
-      for (let i = 0; i < nV; i++) {
-        px[i] += delta[i * 3]     * stepT;
-        py[i] += delta[i * 3 + 1] * stepT;
-        pz[i] += delta[i * 3 + 2] * stepT;
-      }
-    }
-
-    // Convert back to unit-square space for renderer
-    for (let i = 0; i < nV; i++) {
-      result[i] = {
-        x: px[i] / 2 + 0.5,
-        y: pz[i],           // z (lift) becomes y in our coordinate system
-        z: py[i] / 2 + 0.5
-      };
     }
     return result;
   }
 
-  /** Quadratic ease-in-out (from prototype) */
+  /**
+   * Compute folded state at globalProgress.
+   * Each step is sequential — operates on the result of all previous steps.
+   * Each step gets a discrete 1/N slice of the timeline.
+   */
+  function computeFoldState(baseMesh, steps, globalProgress) {
+    const flatVerts = baseMesh.vertices;
+    const nV = flatVerts.length;
+
+    if (!steps || !steps.length) {
+      return flatVerts.map(v => ({ x: v.x, y: 0, z: v.z }));
+    }
+
+    // Start from flat
+    let verts = flatVerts.map(v => ({ x: v.x, y: 0, z: v.z }));
+
+    const count = steps.length;
+    for (let si = 0; si < count; si++) {
+      const start = si / count;
+      const end = (si + 1) / count;
+
+      if (globalProgress <= start) break;
+
+      const raw = Math.min(1, (globalProgress - start) / (end - start));
+      const progress = ease(raw);
+
+      verts = applyFold(verts, flatVerts, steps[si], progress);
+    }
+
+    return verts;
+  }
+
+  // Stubs for compatibility — no longer needed with sequential approach
+  function precomputeDeltas() { return []; }
+  function buildFlatArray() { return new Float32Array(0); }
+
+  /** Quadratic ease-in-out */
   function ease(t) {
     return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   }
@@ -193,6 +135,6 @@ const FoldEngine = (() => {
     return Math.min(idx, steps.length - 1);
   }
 
-  return { createPaperMesh, precomputeDeltas, buildFlatArray, computeFoldState,
+  return { createPaperMesh, computeFoldState, precomputeDeltas, buildFlatArray,
            activeStepIndex, ease };
 })();
