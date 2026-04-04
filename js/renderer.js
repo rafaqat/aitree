@@ -57,24 +57,18 @@ const Renderer = (() => {
     // Paper geometry
     paperGeo = new THREE.PlaneGeometry(2, 2, SEGS, SEGS);
 
-    // Front side: white
-    const frontMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.85,
-      metalness: 0.0,
-      side: THREE.FrontSide
-    });
-    paperFront = new THREE.Mesh(paperGeo, frontMat);
+    // Use MeshBasicMaterial to avoid lighting issues — pure white/gray
+    // FrontSide of PlaneGeometry faces +Z, but after XY→XZ remap the
+    // normal points in a different direction. We render both sides and
+    // let the color tell you which side you're looking at.
+    paperFront = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({
+      color: 0xf5f5f0, side: THREE.FrontSide
+    }));
     foldGroup.add(paperFront);
 
-    // Back side: dark gray (not black — fold lines need to be visible)
-    const backMat = new THREE.MeshStandardMaterial({
-      color: 0x505050,
-      roughness: 0.9,
-      metalness: 0.0,
-      side: THREE.BackSide
-    });
-    paperBack = new THREE.Mesh(paperGeo, backMat);
+    paperBack = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({
+      color: 0x888888, side: THREE.BackSide
+    }));
     foldGroup.add(paperBack);
 
     // Thin wireframe edges for line-art paper outline
