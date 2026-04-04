@@ -4,7 +4,7 @@ Web-based origami designer inspired by Robert Lang's TreeMaker and computational
 
 ## Plan
 
-The full implementation plan is at `.claude/plans/keen-booping-swan.md`. It covers:
+The full implementation plan is at `docs/plan.md`. It covers:
 - Theoretical foundation (Lang's tree method, circle-river packing, flat-foldability theorems)
 - Project structure (10 JS modules across 3-panel layout)
 - Implementation order (10 steps)
