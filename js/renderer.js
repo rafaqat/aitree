@@ -1,10 +1,16 @@
 /**
- * renderer.js — Three.js 3D scene, camera, orbit controls, paper mesh
- * Ported from prototype's initThree() + build3D() with OrbitControls upgrade
+ * renderer.js — Three.js 3D scene
+ *
+ * Visual style: clean line-art like an IKEA assembly diagram.
+ * - Light paper/gray background
+ * - Two-sided paper: white front, dark back
+ * - Fold lines drawn on the model surface
+ * - Thin wireframe edges for paper-like outline
  */
 const Renderer = (() => {
   let scene, camera, renderer, controls;
-  let paperMesh, paperGeo, creaseLinesGroup, foldGroup;
+  let paperFront, paperBack, paperGeo;
+  let edgeLines, creaseLinesGroup, foldGroup;
   let baseMeshData;
   let showCL = true;
   const SEGS = 40;
@@ -20,53 +26,68 @@ const Renderer = (() => {
     renderer.shadowMap.enabled = true;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x05050a);
-    scene.fog = new THREE.FogExp2(0x05050a, 0.065);
+    scene.background = new THREE.Color(0xe8e4de); // warm light paper
 
     camera = new THREE.PerspectiveCamera(44, W / H, 0.01, 100);
-    camera.position.set(0, 1.4, 3.5);
+    camera.position.set(0, 2.2, 3.0);
     camera.lookAt(0, 0, 0);
 
-    // Lights (matched from prototype)
-    scene.add(new THREE.AmbientLight(0xffffff, 0.22));
-    const dl = new THREE.DirectionalLight(0xd0f0b0, 0.95);
-    dl.position.set(2, 4, 3); dl.castShadow = true; scene.add(dl);
-    const fl = new THREE.DirectionalLight(0x90c0f0, 0.4);
-    fl.position.set(-3, 1, -2); scene.add(fl);
-    const rl = new THREE.PointLight(0xf0c890, 0.65, 10);
-    rl.position.set(0, -2, 1); scene.add(rl);
+    // Soft, even lighting for diagram look
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.5);
+    dl.position.set(2, 5, 3); scene.add(dl);
+    const fl = new THREE.DirectionalLight(0xffffff, 0.25);
+    fl.position.set(-3, 3, -2); scene.add(fl);
 
-    // Grid
-    const grid = new THREE.GridHelper(8, 24, 0x181820, 0x111118);
-    grid.position.y = -0.55; scene.add(grid);
+    // Subtle grid floor
+    const grid = new THREE.GridHelper(6, 12, 0xcccccc, 0xdddddd);
+    grid.position.y = -0.01; scene.add(grid);
 
-    // OrbitControls (upgrade from prototype's manual orbit)
+    // OrbitControls
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.target.set(0, 0.1, 0);
+    controls.target.set(0, 0.3, 0);
     controls.update();
 
-    // Fold group holds paper + crease lines
+    // Fold group
     foldGroup = new THREE.Group();
     scene.add(foldGroup);
 
-    // Paper mesh
+    // Paper geometry
     paperGeo = new THREE.PlaneGeometry(2, 2, SEGS, SEGS);
-    const mat = new THREE.MeshPhysicalMaterial({
-      color: 0xeae4d6, roughness: 0.5, metalness: 0.0,
-      side: THREE.DoubleSide, transparent: true, opacity: 0.96
-    });
-    paperMesh = new THREE.Mesh(paperGeo, mat);
-    paperMesh.castShadow = true;
-    paperMesh.receiveShadow = true;
-    foldGroup.add(paperMesh);
 
-    // Crease lines group
+    // Front side: white
+    const frontMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.85,
+      metalness: 0.0,
+      side: THREE.FrontSide
+    });
+    paperFront = new THREE.Mesh(paperGeo, frontMat);
+    foldGroup.add(paperFront);
+
+    // Back side: dark charcoal
+    const backMat = new THREE.MeshStandardMaterial({
+      color: 0x2a2a2a,
+      roughness: 0.9,
+      metalness: 0.0,
+      side: THREE.BackSide
+    });
+    paperBack = new THREE.Mesh(paperGeo, backMat);
+    foldGroup.add(paperBack);
+
+    // Thin wireframe edges for line-art paper outline
+    const edgeGeo = new THREE.EdgesGeometry(paperGeo, 15);
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0x999999, linewidth: 1 });
+    edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+    foldGroup.add(edgeLines);
+
+    // Crease lines group (fold lines on the model)
     creaseLinesGroup = new THREE.Group();
     foldGroup.add(creaseLinesGroup);
 
-    // Store base mesh data for fold engine
+    // Store base mesh
     baseMeshData = FoldEngine.createPaperMesh(SEGS);
 
     window.addEventListener('resize', resize);
@@ -88,8 +109,8 @@ const Renderer = (() => {
   }
 
   /**
-   * Update paper mesh from folded vertex positions.
-   * Vertices are in unit-square [0,1] space; map to [-1,1] world coords.
+   * Update paper mesh vertices from folded positions.
+   * Maps unit-square [0,1] to world [-1,1].
    */
   function updatePaper(vertices) {
     const pos = paperGeo.attributes.position;
@@ -100,14 +121,24 @@ const Renderer = (() => {
     }
     pos.needsUpdate = true;
     paperGeo.computeVertexNormals();
+
+    // Update edge wireframe
+    if (edgeLines) {
+      foldGroup.remove(edgeLines);
+      if (edgeLines.geometry) edgeLines.geometry.dispose();
+      const edgeGeo = new THREE.EdgesGeometry(paperGeo, 15);
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0x888888, linewidth: 1 });
+      edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+      foldGroup.add(edgeLines);
+    }
   }
 
   /**
-   * Draw crease lines on the paper surface.
-   * lines: array of {line:{x1,y1,x2,y2}, type:'mountain'|'valley'|'axial'}
+   * Draw fold lines on the paper surface.
+   * These show where future folds will happen.
+   * Mountain = red, Valley = blue, completed = gray
    */
-  function updateCreaseLines(lines) {
-    // Clear old
+  function updateCreaseLines(lines, activeIdx) {
     while (creaseLinesGroup.children.length) {
       const c = creaseLinesGroup.children[0];
       if (c.geometry) c.geometry.dispose();
@@ -116,22 +147,45 @@ const Renderer = (() => {
     }
     if (!lines || !showCL) return;
 
-    for (const step of lines) {
-      const col = step.type === 'mountain' ? 0xf07070
-                : step.type === 'valley' ? 0x6090f0
-                : 0x80c0f0;
-      const opacity = step.type === 'axial' ? 0.35 : 0.8;
-      const material = new THREE.LineBasicMaterial({ color: col, transparent: true, opacity });
+    activeIdx = activeIdx || -1;
+
+    for (let i = 0; i < lines.length; i++) {
+      const step = lines[i];
+      // Color: upcoming folds are colored, completed are subtle gray
+      let col, opacity;
+      if (i < activeIdx) {
+        col = 0xaaaaaa; opacity = 0.3; // completed — faded
+      } else if (step.type === 'mountain') {
+        col = 0xcc3333; opacity = 0.9; // red dashed
+      } else if (step.type === 'valley') {
+        col = 0x3366cc; opacity = 0.9; // blue
+      } else {
+        col = 0x6699cc; opacity = 0.5; // axial
+      }
+
+      const material = new THREE.LineDashedMaterial({
+        color: col,
+        transparent: true,
+        opacity: opacity,
+        dashSize: step.type === 'mountain' ? 0.06 : 0.04,
+        gapSize: step.type === 'mountain' ? 0.03 : 0.02,
+        linewidth: 1
+      });
+
       const pts = [
-        new THREE.Vector3((step.line.x1 - 0.5) * 2, 0.003, (step.line.y1 - 0.5) * 2),
-        new THREE.Vector3((step.line.x2 - 0.5) * 2, 0.003, (step.line.y2 - 0.5) * 2)
+        new THREE.Vector3((step.line.x1 - 0.5) * 2, 0.005, (step.line.y1 - 0.5) * 2),
+        new THREE.Vector3((step.line.x2 - 0.5) * 2, 0.005, (step.line.y2 - 0.5) * 2)
       ];
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
-      creaseLinesGroup.add(new THREE.Line(geo, material));
+      const line = new THREE.Line(geo, material);
+      line.computeLineDistances();
+      creaseLinesGroup.add(line);
     }
   }
 
-  function setWireframe(on) { if (paperMesh) paperMesh.material.wireframe = on; }
+  function setWireframe(on) {
+    if (edgeLines) edgeLines.visible = on;
+  }
 
   function setCreaseLinesVisible(on) {
     showCL = on;
@@ -141,9 +195,8 @@ const Renderer = (() => {
   function getBaseMesh() { return baseMeshData; }
 
   function setGroupTilt(t) {
-    foldGroup.rotation.x = t * 0.22;
-    foldGroup.rotation.z = t * 0.06;
-    foldGroup.position.y = t * 0.14;
+    foldGroup.rotation.x = t * 0.15;
+    foldGroup.position.y = t * 0.1;
   }
 
   function showEmpty(show) {
