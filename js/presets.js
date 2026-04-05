@@ -292,8 +292,162 @@ const Presets = (() => {
     };
   }
 
+  // ── Paper Airplane FOLD data ──
+  var AIRPLANE_FOLD = {
+    vertices_coords: [
+      [0,0],[0.5,0],[1,0],                     // 0-2: top row
+      [0.5,0.3],                                // 3: nose point
+      [0.2,0.15],[0.8,0.15],                    // 4-5: upper wing fold
+      [0,0.5],[0.5,0.5],[1,0.5],                // 6-8: mid row
+      [0.25,0.5],[0.75,0.5],                    // 9-10: wing fold mid
+      [0,1],[0.5,1],[1,1],                      // 11-13: bottom row
+      [0.3,1],[0.7,1]                           // 14-15: wing fold bottom
+    ],
+    edges_vertices: [
+      [0,1],[1,2],                              // top boundary
+      [2,5],[5,8],[8,13],[13,15],[15,12],[12,14],[14,11],[11,6],[6,4],[4,0], // boundary
+      [1,3],[3,12],                             // center line (V)
+      [0,3],[2,3],                              // nose folds (V)
+      [4,9],[9,14],                             // left wing fold (V)
+      [5,10],[10,15],                           // right wing fold (V)
+      [4,3],[5,3],                              // nose-wing connections
+      [3,9],[3,10],                             // internal
+      [6,9],[9,12],[10,8],[10,12],              // internal lower
+      [4,6],[5,8],[1,4],[1,5]                   // internal upper
+    ],
+    edges_assignment: [
+      'B','B',
+      'B','B','B','B','B','B','B','B','B','B',
+      'V','V',
+      'V','V',
+      'V','V',
+      'V','V',
+      'M','M',
+      'M','M',
+      'M','M','M','M',
+      'V','V','M','M'
+    ],
+    faces_vertices: [
+      [0,1,4],[1,3,4],[1,5,3],[1,2,5],         // nose area
+      [0,4,6],[4,3,9],[4,9,6],                  // left upper
+      [2,8,5],[5,10,3],[5,8,10],                // right upper
+      [6,9,11],[9,14,11],[9,12,14],             // left lower
+      [8,13,10],[10,15,12],[10,13,15],          // right lower
+      [3,10,9],[9,10,12]                        // center
+    ],
+    folded_coords: [
+      [0.15,0.05],[0.5,0.05],[0.15,0.05],       // 0-2: nose tips fold together
+      [0.5,0.25],                                // 3: nose point
+      [0.3,0.12],[0.3,0.12],                     // 4-5: wing fold top (overlap)
+      [0.1,0.45],[0.5,0.45],[0.1,0.45],          // 6-8: mid (fold together)
+      [0.25,0.45],[0.25,0.45],                   // 9-10: wing fold mid
+      [0.1,0.85],[0.5,0.85],[0.1,0.85],          // 11-13: tail
+      [0.2,0.85],[0.2,0.85]                      // 14-15: wing fold bottom
+    ]
+  };
+
+  function loadFOLDModel(foldData, name) {
+    var verts = foldData.vertices_coords;
+    var edgesV = foldData.edges_vertices;
+    var assignments = foldData.edges_assignment;
+    var letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+    var creases = [];
+    for (var i = 0; i < edgesV.length; i++) {
+      if (assignments[i] === 'B') continue;
+      var v0 = verts[edgesV[i][0]], v1 = verts[edgesV[i][1]];
+      var len = Math.hypot(v1[0] - v0[0], v1[1] - v0[1]);
+      creases.push({
+        type: assignments[i] === 'M' ? 'mountain' : 'valley',
+        line: { x1: v0[0], y1: v0[1], x2: v1[0], y2: v1[1] },
+        length: len
+      });
+    }
+    creases.sort(function(a, b) { return b.length - a.length; });
+
+    return {
+      name: name,
+      isFOLD: true,
+      foldData: {
+        vertices: foldData.vertices_coords,
+        faces: foldData.faces_vertices,
+        edges: foldData.edges_vertices,
+        assignments: foldData.edges_assignment,
+        foldedCoords: foldData.folded_coords
+      },
+      steps: creases.map(function(c, i) {
+        return {
+          id: i < 26 ? letters[i] : letters[Math.floor(i/26)-1] + letters[i%26],
+          label: c.type + ' fold',
+          type: c.type,
+          line: c.line,
+          angle: 180,
+          foldAngle: PI
+        };
+      }),
+      tree: { nodes: [], edges: [] }
+    };
+  }
+
+  // ── Paper Boat FOLD data ──
+  var BOAT_FOLD = {
+    vertices_coords: [
+      [0,0],[0.5,0],[1,0],                      // 0-2: top row
+      [0,0.5],[0.5,0.5],[1,0.5],                // 3-5: middle row
+      [0.15,0.5],[0.85,0.5],                    // 6-7: brim fold points
+      [0,0.75],[0.5,0.75],[1,0.75],             // 8-10: lower row
+      [0.15,0.75],[0.85,0.75],                  // 11-12: brim corners
+      [0,1],[0.5,1],[1,1]                       // 13-15: bottom row
+    ],
+    edges_vertices: [
+      [0,1],[1,2],                              // top boundary
+      [2,5],[5,7],[7,10],[10,12],[12,15],[15,14],[14,13],[13,8],[8,11],[11,3],[3,6],[6,0], // boundary
+      [1,4],[4,14],                             // center line
+      [0,4],[2,4],                              // triangle folds
+      [6,4],[7,4],                              // brim connections
+      [3,4],[5,4],                              // mid connections
+      [8,9],[9,10],                             // lower mid
+      [11,9],[12,9],                            // lower brim
+      [9,14],                                   // lower center
+      [6,11],[7,12],                            // brim verticals
+      [1,6],[1,7]                               // internal
+    ],
+    edges_assignment: [
+      'B','B',
+      'B','B','B','B','B','B','B','B','B','B','B','B',
+      'V','V',
+      'V','V',
+      'M','M',
+      'V','V',
+      'V','V',
+      'M','M',
+      'V',
+      'M','M',
+      'V','V'
+    ],
+    faces_vertices: [
+      [0,1,6],[1,4,6],[1,7,4],[1,2,7],          // upper triangles
+      [0,6,3],[6,4,3],[4,7,5],[7,2,5],          // upper sides
+      [3,4,11],[4,9,11],[4,12,9],[4,5,12],      // mid to lower
+      [3,11,8],[11,9,8],[9,12,10],[12,5,10],    // lower sides
+      [8,9,13],[9,14,13],[9,10,15],[9,15,14]    // bottom
+    ],
+    folded_coords: [
+      [0.2,0.1],[0.5,0.05],[0.8,0.1],            // 0-2: hat peak
+      [0.1,0.45],[0.5,0.35],[0.9,0.45],           // 3-5: mid
+      [0.25,0.35],[0.75,0.35],                    // 6-7: brim upper
+      [0.1,0.65],[0.5,0.55],[0.9,0.65],           // 8-10: hull
+      [0.2,0.55],[0.8,0.55],                      // 11-12: brim lower
+      [0.15,0.8],[0.5,0.75],[0.85,0.8]            // 13-15: hull bottom
+    ]
+  };
+
   function getList() {
-    var list = [{ key: 'crane-fold', name: 'Crane (Traditional CP)' }];
+    var list = [
+      { key: 'crane-fold', name: 'Crane (Traditional CP)' },
+      { key: 'airplane-fold', name: 'Paper Airplane (FOLD)' },
+      { key: 'boat-fold', name: 'Paper Boat (FOLD)' }
+    ];
     Object.keys(DATA).forEach(function(k) {
       list.push({ key: k, name: DATA[k].name });
     });
@@ -302,6 +456,8 @@ const Presets = (() => {
 
   function load(key) {
     if (key === 'crane-fold') return loadCraneFOLD();
+    if (key === 'airplane-fold') return loadFOLDModel(AIRPLANE_FOLD, 'Paper Airplane');
+    if (key === 'boat-fold') return loadFOLDModel(BOAT_FOLD, 'Paper Boat');
 
     const d = DATA[key];
     if (!d) return null;
