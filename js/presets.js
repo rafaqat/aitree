@@ -389,6 +389,66 @@ const Presets = (() => {
     };
   }
 
+  // ── Fortune Teller FOLD data ──
+  // Classic cootie catcher: 4 corners fold to center, then opens into 3D
+  var FORTUNE_FOLD = {
+    vertices_coords: [
+      [0,0],[0.5,0],[1,0],       // 0-2: top
+      [1,0.5],                    // 3: right mid
+      [1,1],[0.5,1],[0,1],       // 4-6: bottom
+      [0,0.5],                    // 7: left mid
+      [0.5,0.5],                 // 8: center
+      [0.25,0.25],[0.75,0.25],   // 9-10: inner quad top
+      [0.75,0.75],[0.25,0.75]    // 11-12: inner quad bottom
+    ],
+    edges_vertices: [
+      [0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,0],  // boundary
+      [0,8],[8,4],     // diagonal 1
+      [2,8],[8,6],     // diagonal 2
+      [1,8],[8,5],     // vertical center
+      [7,8],[8,3],     // horizontal center
+      [1,7],[7,5],[5,3],[3,1],   // inner diamond
+      [0,9],[9,1],[9,8],         // top-left triangle details
+      [1,10],[10,2],[10,8],      // top-right
+      [3,11],[11,4],[11,8],      // bottom-right
+      [7,12],[12,6],[12,8]       // bottom-left
+    ],
+    edges_assignment: [
+      'B','B','B','B','B','B','B','B',
+      'V','V',
+      'V','V',
+      'M','M',
+      'M','M',
+      'V','V','V','V',
+      'V','V','M',
+      'V','V','M',
+      'V','V','M',
+      'V','V','M'
+    ],
+    faces_vertices: [
+      [0,9,8],[0,1,9],[1,9,8],
+      [1,10,8],[1,2,10],[2,10,8],
+      [2,3,8],[3,11,8],[3,4,11],[4,11,8],
+      [4,5,8],[5,12,8],[5,6,12],[6,12,8],
+      [6,7,8],[7,0,8]
+    ],
+    folded_coords: [
+      [0.35,0.35],  // 0: TL corner → folds toward center
+      [0.5,0.1],    // 1: top mid → extends outward
+      [0.65,0.35],  // 2: TR corner → folds toward center
+      [0.9,0.5],    // 3: right mid → extends outward
+      [0.65,0.65],  // 4: BR corner → folds toward center
+      [0.5,0.9],    // 5: bottom mid → extends outward
+      [0.35,0.65],  // 6: BL corner → folds toward center
+      [0.1,0.5],    // 7: left mid → extends outward
+      [0.5,0.5],    // 8: center stays
+      [0.42,0.3],   // 9: inner top-left
+      [0.58,0.3],   // 10: inner top-right
+      [0.58,0.7],   // 11: inner bottom-right
+      [0.42,0.7]    // 12: inner bottom-left
+    ]
+  };
+
   // ── Paper Boat FOLD data ──
   var BOAT_FOLD = {
     vertices_coords: [
@@ -446,7 +506,8 @@ const Presets = (() => {
     var list = [
       { key: 'crane-fold', name: 'Crane (Traditional CP)' },
       { key: 'airplane-fold', name: 'Paper Airplane (FOLD)' },
-      { key: 'boat-fold', name: 'Paper Boat (FOLD)' }
+      { key: 'boat-fold', name: 'Paper Boat (FOLD)' },
+      { key: 'fortune-fold', name: 'Fortune Teller (FOLD)' }
     ];
     Object.keys(DATA).forEach(function(k) {
       list.push({ key: k, name: DATA[k].name });
@@ -458,6 +519,7 @@ const Presets = (() => {
     if (key === 'crane-fold') return loadCraneFOLD();
     if (key === 'airplane-fold') return loadFOLDModel(AIRPLANE_FOLD, 'Paper Airplane');
     if (key === 'boat-fold') return loadFOLDModel(BOAT_FOLD, 'Paper Boat');
+    if (key === 'fortune-fold') return loadFOLDModel(FORTUNE_FOLD, 'Fortune Teller');
 
     const d = DATA[key];
     if (!d) return null;
