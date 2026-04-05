@@ -51,18 +51,59 @@ const FoldEngine = (() => {
   // ── Mesh creation ───────────────────────────────
 
   /**
-   * Generate subdivided grid mesh for unit square [0,1]x[0,1].
-   * Vertices on XZ plane (y=0).
+   * Generate a grid mesh for unit square [0,1]x[0,1].
+   *
+   * If foldLines are provided, vertices near fold lines are snapped
+   * onto the lines so that fold boundaries follow mesh edges exactly,
+   * eliminating zigzag artifacts on diagonal folds.
    */
-  function createPaperMesh(subdivisions) {
+  function createPaperMesh(subdivisions, foldLines) {
     subdivisions = subdivisions || 128;
     const n = subdivisions + 1;
     const vertices = [];
+
+    // Build regular grid
     for (let row = 0; row < n; row++) {
       for (let col = 0; col < n; col++) {
         vertices.push({ x: col / subdivisions, y: 0, z: row / subdivisions });
       }
     }
+
+    // Snap nearby vertices onto fold lines to eliminate zigzag
+    if (foldLines && foldLines.length) {
+      const snapDist = 0.6 / subdivisions; // snap within ~60% of grid cell
+      for (let i = 0; i < vertices.length; i++) {
+        const v = vertices[i];
+        // Don't snap corner/edge vertices (keep boundary intact)
+        if (v.x <= 0.001 || v.x >= 0.999 || v.z <= 0.001 || v.z >= 0.999) continue;
+
+        let bestDist = snapDist;
+        let bestX = v.x, bestZ = v.z;
+
+        for (const fl of foldLines) {
+          // Project vertex onto fold line segment, find nearest point
+          const dx = fl.x2 - fl.x1, dz = fl.y2 - fl.y1;
+          const len2 = dx * dx + dz * dz;
+          if (len2 < 1e-10) continue;
+          let t = ((v.x - fl.x1) * dx + (v.z - fl.y1) * dz) / len2;
+          t = Math.max(0, Math.min(1, t));
+          const px = fl.x1 + t * dx, pz = fl.y1 + t * dz;
+          const dist = Math.hypot(v.x - px, v.z - pz);
+
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestX = px;
+            bestZ = pz;
+          }
+        }
+
+        if (bestDist < snapDist) {
+          v.x = bestX;
+          v.z = bestZ;
+        }
+      }
+    }
+
     return { vertices, subdivisions };
   }
 

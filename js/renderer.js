@@ -558,6 +558,23 @@ const Renderer = (() => {
 
   function getBaseMesh() { return baseMeshData; }
 
+  /**
+   * Rebuild the mesh with vertices snapped to fold lines.
+   * Call this when steps change to eliminate zigzag artifacts.
+   */
+  function rebuildMesh(foldLines) {
+    baseMeshData = FoldEngine.createPaperMesh(SEGS, foldLines);
+
+    // Rebuild PlaneGeometry with snapped vertex positions
+    const pos = paperGeo.attributes.position;
+    const verts = baseMeshData.vertices;
+    for (let i = 0; i < verts.length && i < pos.count; i++) {
+      pos.setXYZ(i, (verts[i].x - 0.5) * 2, 0, (verts[i].z - 0.5) * 2);
+    }
+    pos.needsUpdate = true;
+    paperGeo.computeVertexNormals();
+  }
+
   function setGroupTilt() {}
 
   function showEmpty(show) {
@@ -573,6 +590,7 @@ const Renderer = (() => {
     setWireframe,
     setCreaseLinesVisible,
     getBaseMesh,
+    rebuildMesh,
     setGroupTilt,
     showEmpty,
     resize

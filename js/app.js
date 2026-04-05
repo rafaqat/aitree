@@ -63,6 +63,7 @@
     // Load steps into sequencer
     StepSequencer.setSteps(data.steps);
     StepSequencer.renderStepList(document.getElementById('step-list'));
+    syncTransportUI(0);
 
     // Load tree data into tree graph
     TreeGraph.setTree(data.tree);
@@ -73,9 +74,8 @@
     });
     Designer.setCreases(designerCreases);
 
-    // Rebuild fold cache and update 3D
-    updateFold(0);
-    updateCreaseLines(data.steps);
+    // Rebuild mesh with fold-line-snapped vertices, then fold
+    rebuildAndFold(data.steps, 0);
     Renderer.showEmpty(false);
 
     // Validate
@@ -211,38 +211,27 @@
   function wireCallbacks() {
     // Step sequencer update → fold + UI
     StepSequencer.onUpdate = function(globalT, activeIdx) {
+      Renderer.setActiveStep(activeIdx);
       updateFold(globalT);
-      StepSequencer.updateStepList(globalT);
-      StepSequencer.updateOverlay(globalT);
-      Renderer.setGroupTilt(globalT);
-
-      // Update timeline slider
-      document.getElementById('timeline').value = Math.round(globalT * 1000);
-      document.getElementById('pct').textContent = Math.round(globalT * 100) + '%';
-
-      // Update play button state
-      var btn = document.getElementById('btn-play');
-      btn.textContent = StepSequencer.isPlaying() ? 'Pause' : 'Play';
-      btn.classList.toggle('on', StepSequencer.isPlaying());
+      syncTransportUI(globalT);
     };
 
     // Designer changes → update 3D + validation
     Designer.onChanged = function(creases) {
       var steps = creases.map(function(c, i) {
-        var letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         return {
-          id: i < 26 ? letters[i] : letters[i % 26],
+          id: stepIdForIndex(i),
           label: c.type + ' fold',
           type: c.type,
           line: c.line,
-          angle: 180
+          angle: 180,
+          foldAngle: Math.PI
         };
       });
       StepSequencer.setSteps(steps);
       StepSequencer.renderStepList(document.getElementById('step-list'));
-      rebuildFoldCache();
-      updateFold(0);
-      updateCreaseLines(steps);
+      syncTransportUI(0);
+      rebuildAndFold(steps, 0);
       runValidation(creases, [], null);
       updateStats(0, 0, creases.length, steps.length);
       Renderer.showEmpty(steps.length === 0);
@@ -251,7 +240,7 @@
     // Tree graph changes → run validation
     TreeGraph.onChanged = function(tree) {
       runValidation([], [], tree);
-      updateStats(tree.nodes.length, 0, 0, 0);
+      clearComputedTreeOutput(tree);
     };
 
     // Window resize
@@ -264,6 +253,17 @@
 
   // ── Core Update Functions ─────────────────
 
+  /**
+   * Rebuild the mesh with vertices snapped to fold lines,
+   * then recompute the fold. Call when steps change.
+   */
+  function rebuildAndFold(steps, globalT) {
+    var foldLines = steps.map(function(s) { return s.line; });
+    Renderer.rebuildMesh(foldLines);
+    updateFold(globalT || 0);
+    updateCreaseLines(steps);
+  }
+
   function updateFold(globalT) {
     var baseMesh = Renderer.getBaseMesh();
     var steps = StepSequencer.getSteps();
@@ -272,12 +272,20 @@
   }
 
   function updateCreaseLines(steps) {
-    Renderer.updateCreaseLines(steps);
+    Renderer.updateCreaseLines(
+      steps,
+      FoldEngine.activeStepIndex(steps, StepSequencer.getProgress())
+    );
   }
 
   function computeFromTree() {
     var tree = TreeGraph.getTree();
     if (!tree.nodes.length || !tree.edges.length) return;
+    var validation = runValidation([], [], tree);
+    if (validation.tree !== 'pass') {
+      clearComputedTreeOutput(tree);
+      return;
+    }
 
     var treeCanvas = document.getElementById('tree-canvas');
     var result = Packing.compute(tree, treeCanvas.width, treeCanvas.height);
@@ -288,8 +296,8 @@
     // Load computed steps
     StepSequencer.setSteps(result.steps);
     StepSequencer.renderStepList(document.getElementById('step-list'));
-    updateFold(0);
-    updateCreaseLines(result.steps);
+    syncTransportUI(0);
+    rebuildAndFold(result.steps, 0);
     Renderer.showEmpty(result.steps.length === 0);
 
     // Update designer with computed creases
@@ -314,6 +322,7 @@
     setDot('v-maekawa', result.maekawa);
     setDot('v-packing', result.packing);
     setDot('v-tree', result.tree);
+    return result;
   }
 
   function setDot(id, status) {
@@ -333,6 +342,50 @@
   function setText(id, val) {
     var el = document.getElementById(id);
     if (el) el.textContent = val;
+  }
+
+  function stepIdForIndex(index) {
+    var letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    var id = '';
+    var value = index;
+
+    do {
+      id = letters[value % 26] + id;
+      value = Math.floor(value / 26) - 1;
+    } while (value >= 0);
+
+    return id;
+  }
+
+  function syncTransportUI(globalT) {
+    if (typeof globalT !== 'number') globalT = StepSequencer.getProgress();
+
+    StepSequencer.updateStepList(globalT);
+    StepSequencer.updateOverlay(globalT);
+
+    var timeline = document.getElementById('timeline');
+    if (timeline) timeline.value = Math.round(globalT * 1000);
+
+    var pct = document.getElementById('pct');
+    if (pct) pct.textContent = Math.round(globalT * 100) + '%';
+
+    var btn = document.getElementById('btn-play');
+    if (btn) {
+      btn.textContent = StepSequencer.isPlaying() ? 'Pause' : 'Play';
+      btn.classList.toggle('on', StepSequencer.isPlaying());
+    }
+  }
+
+  function clearComputedTreeOutput(tree) {
+    TreeGraph.setCircles([]);
+    StepSequencer.setSteps([]);
+    StepSequencer.renderStepList(document.getElementById('step-list'));
+    syncTransportUI(0);
+    updateFold(0);
+    updateCreaseLines([]);
+    Renderer.showEmpty(true);
+    Designer.setCreases([]);
+    updateStats(tree && tree.nodes ? tree.nodes.length : 0, 0, 0, 0);
   }
 
   // ── SVG Export ────────────────────────────
