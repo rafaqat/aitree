@@ -1,261 +1,580 @@
 /**
  * renderer.js — Three.js 3D scene
  *
- * Visual style: clean line-art like an IKEA assembly diagram.
- * - Light paper/gray background
- * - Two-sided paper: white front, dark back
- * - Fold lines drawn on the model surface
- * - Thin wireframe edges for paper-like outline
+ * Technical origami rendering style:
+ * - Rigid facets with flat shading (each triangle panel visible)
+ * - Thin wireframe mesh overlay showing facet structure
+ * - Front = soft paper color, back = lighter tint
+ * - Clean edges, academic/architectural quality
+ * - Shadows between folded layers
  */
 const Renderer = (() => {
   let scene, camera, renderer, controls;
   let paperFront, paperBack, paperGeo;
-  let edgeLines, creaseLinesGroup, foldGroup;
+  let wireframeMesh; // thin wireframe overlay
+  let outlineLine, creaseLinesGroup, foldGroup;
+  let shadowPlane;
   let baseMeshData;
   let showCL = true;
-  const SEGS = 40;
+  let showWF = false;
+
+  let currentCreaseData = [];
+  let currentActiveIdx = -1;
+  let creaseEntries = [];
+
+  const SEGS = 128;
+  const CREASE_SAMPLES = 24;
+  const OUTLINE_INDICES = buildOutlineIndices();
 
   function init() {
     const canvas = document.getElementById('gl');
     const vp = document.getElementById('vp');
-    const W = vp.clientWidth || 600, H = vp.clientHeight || 600;
+    const W = vp.clientWidth || 600;
+    const H = vp.clientHeight || 600;
 
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(W, H);
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xe8e4de); // warm light paper
+    scene.background = new THREE.Color(0xfafafa);
 
-    camera = new THREE.PerspectiveCamera(44, W / H, 0.01, 100);
-    camera.position.set(0, 2.2, 3.0);
+    camera = new THREE.PerspectiveCamera(36, W / H, 0.01, 100);
+    camera.position.set(0, 3.2, 3.5);
     camera.lookAt(0, 0, 0);
 
-    // Soft, even lighting for diagram look
-    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-    const dl = new THREE.DirectionalLight(0xffffff, 0.5);
-    dl.position.set(2, 5, 3); scene.add(dl);
-    const fl = new THREE.DirectionalLight(0xffffff, 0.25);
-    fl.position.set(-3, 3, -2); scene.add(fl);
+    // ── Lighting: clean, even, academic diagram style ──
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-    // Subtle grid floor
-    const grid = new THREE.GridHelper(6, 12, 0xcccccc, 0xdddddd);
-    grid.position.y = -0.01; scene.add(grid);
+    const topLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    topLight.position.set(0, 80, 20);
+    topLight.castShadow = true;
+    topLight.shadow.mapSize.width = 2048;
+    topLight.shadow.mapSize.height = 2048;
+    topLight.shadow.camera.near = 0.5;
+    topLight.shadow.camera.far = 200;
+    topLight.shadow.camera.left = -4;
+    topLight.shadow.camera.right = 4;
+    topLight.shadow.camera.top = 4;
+    topLight.shadow.camera.bottom = -4;
+    topLight.shadow.bias = -0.0003;
+    topLight.shadow.normalBias = 0.02;
+    scene.add(topLight);
 
-    // OrbitControls
+    const fillRight = new THREE.DirectionalLight(0xffffff, 0.35);
+    fillRight.position.set(60, 10, 30);
+    scene.add(fillRight);
+
+    const fillLeft = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLeft.position.set(-60, 10, -20);
+    scene.add(fillLeft);
+
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.15);
+    rimLight.position.set(0, -40, -60);
+    scene.add(rimLight);
+
+    // ── Ground shadow receiver ──
+    const groundGeo = new THREE.PlaneGeometry(10, 10);
+    groundGeo.rotateX(-Math.PI / 2);
+    shadowPlane = new THREE.Mesh(groundGeo, new THREE.ShadowMaterial({ opacity: 0.12 }));
+    shadowPlane.position.y = -0.02;
+    shadowPlane.receiveShadow = true;
+    scene.add(shadowPlane);
+
+    // Subtle floor grid
+    const grid = new THREE.GridHelper(6, 18, 0xdddddd, 0xeeeeee);
+    grid.position.y = -0.015;
+    scene.add(grid);
+
+    // Orbit controls
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.target.set(0, 0.3, 0);
+    controls.target.set(0, 0.15, 0);
     controls.update();
 
-    // Fold group
     foldGroup = new THREE.Group();
     scene.add(foldGroup);
 
-    // Paper geometry
+    // ── Paper geometry ──
     paperGeo = new THREE.PlaneGeometry(2, 2, SEGS, SEGS);
 
-    // Use MeshBasicMaterial to avoid lighting issues — pure white/gray
-    // FrontSide of PlaneGeometry faces +Z, but after XY→XZ remap the
-    // normal points in a different direction. We render both sides and
-    // let the color tell you which side you're looking at.
-    paperFront = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({
-      color: 0xf5f5f0, side: THREE.FrontSide
+    // Front face — smooth shading hides grid staircase artifacts
+    paperFront = new THREE.Mesh(paperGeo, new THREE.MeshPhongMaterial({
+      color: 0xd5cec6,
+      side: THREE.FrontSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1
     }));
+    paperFront.castShadow = true;
+    paperFront.receiveShadow = true;
     foldGroup.add(paperFront);
 
-    paperBack = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({
-      color: 0xd0d0c8, side: THREE.BackSide
+    // Back face — warm tint shows when paper flips
+    paperBack = new THREE.Mesh(paperGeo, new THREE.MeshPhongMaterial({
+      color: 0xe0c0b0,
+      side: THREE.BackSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1
     }));
+    paperBack.castShadow = true;
+    paperBack.receiveShadow = true;
     foldGroup.add(paperBack);
 
-    // Thin wireframe edges for line-art paper outline
-    const edgeGeo = new THREE.EdgesGeometry(paperGeo, 15);
-    const edgeMat = new THREE.LineBasicMaterial({ color: 0x999999, linewidth: 1 });
-    edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
-    foldGroup.add(edgeLines);
+    // ── Wireframe overlay — toggled with Wireframe button ──
+    wireframeMesh = new THREE.LineSegments(
+      new THREE.WireframeGeometry(paperGeo),
+      new THREE.LineBasicMaterial({
+        color: 0x999999,
+        transparent: true,
+        opacity: 0.15
+      })
+    );
+    wireframeMesh.visible = false;
+    foldGroup.add(wireframeMesh);
 
-    // Crease lines group (fold lines on the model)
+    // ── Paper edge outline — dark border ──
+    outlineLine = createOutlineLine();
+    outlineLine.visible = true;
+    foldGroup.add(outlineLine);
+
     creaseLinesGroup = new THREE.Group();
     foldGroup.add(creaseLinesGroup);
 
-    // Store base mesh
     baseMeshData = FoldEngine.createPaperMesh(SEGS);
 
     window.addEventListener('resize', resize);
-    loop();
+    window.addEventListener('keydown', handleKey);
+
+    // Render loop
+    requestAnimationFrame(function loop() {
+      requestAnimationFrame(loop);
+      controls.update();
+      renderer.render(scene, camera);
+    });
   }
+
+  // ── Keyboard camera controls (3D-modeling style) ──────────
+
+  const ANIM_DURATION = 300;
+  const CAM_DIST = 4.2;
+  let camAnimating = false;
+
+  const VIEW_PRESETS = {
+    front:  { pos: [0, 0.2, CAM_DIST],  target: [0, 0.2, 0] },
+    back:   { pos: [0, 0.2, -CAM_DIST], target: [0, 0.2, 0] },
+    right:  { pos: [CAM_DIST, 0.2, 0],  target: [0, 0.2, 0] },
+    left:   { pos: [-CAM_DIST, 0.2, 0], target: [0, 0.2, 0] },
+    top:    { pos: [0, CAM_DIST, 0.01],  target: [0, 0, 0] },
+    bottom: { pos: [0, -CAM_DIST, 0.01], target: [0, 0, 0] },
+    home:   { pos: [0, 3.0, 3.2],        target: [0, 0.2, 0] }
+  };
+
+  function handleKey(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+    if (camAnimating) return;
+
+    const k = e.key;
+    const shift = e.shiftKey;
+
+    if (k === '1')                   { animateToView('front'); e.preventDefault(); return; }
+    if (k === '3')                   { animateToView('right'); e.preventDefault(); return; }
+    if (k === '7')                   { animateToView('top');   e.preventDefault(); return; }
+    if (shift && k === '!')          { animateToView('back');   e.preventDefault(); return; }
+    if (shift && k === '#')          { animateToView('left');   e.preventDefault(); return; }
+    if (shift && k === '&')          { animateToView('bottom'); e.preventDefault(); return; }
+    if (k === '0')                   { animateToView('home');  e.preventDefault(); return; }
+    if (k === '5')                   { toggleOrtho();          e.preventDefault(); return; }
+    if (k === 'f' || k === 'F')      { frameModel();           e.preventDefault(); return; }
+
+    const ROT = Math.PI / 12;
+    if (k === 'ArrowLeft')  { orbitBy(-ROT, 0); e.preventDefault(); return; }
+    if (k === 'ArrowRight') { orbitBy(ROT, 0);  e.preventDefault(); return; }
+    if (k === 'ArrowUp')    { orbitBy(0, -ROT); e.preventDefault(); return; }
+    if (k === 'ArrowDown')  { orbitBy(0, ROT);  e.preventDefault(); return; }
+
+    if (k === '+' || k === '=') { zoomBy(-0.3); e.preventDefault(); return; }
+    if (k === '-' || k === '_') { zoomBy(0.3);  e.preventDefault(); return; }
+  }
+
+  function animateToView(name) {
+    const preset = VIEW_PRESETS[name];
+    if (!preset) return;
+
+    const startPos = camera.position.clone();
+    const endPos = new THREE.Vector3(...preset.pos);
+    const startTarget = controls.target.clone();
+    const endTarget = new THREE.Vector3(...preset.target);
+    const startTime = performance.now();
+
+    camAnimating = true;
+
+    function tick(now) {
+      const elapsed = now - startTime;
+      const t = Math.min(1, elapsed / ANIM_DURATION);
+      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+      camera.position.lerpVectors(startPos, endPos, e);
+      controls.target.lerpVectors(startTarget, endTarget, e);
+      controls.update();
+
+      if (t < 1) {
+        requestAnimationFrame(tick);
+      } else {
+        camAnimating = false;
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function orbitBy(dTheta, dPhi) {
+    const offset = camera.position.clone().sub(controls.target);
+    const r = offset.length();
+    let theta = Math.atan2(offset.x, offset.z) + dTheta;
+    let phi = Math.acos(Math.min(1, Math.max(-1, offset.y / r))) + dPhi;
+    phi = Math.max(0.05, Math.min(Math.PI - 0.05, phi));
+
+    offset.x = r * Math.sin(phi) * Math.sin(theta);
+    offset.y = r * Math.cos(phi);
+    offset.z = r * Math.sin(phi) * Math.cos(theta);
+
+    camera.position.copy(controls.target).add(offset);
+    controls.update();
+  }
+
+  function zoomBy(delta) {
+    const offset = camera.position.clone().sub(controls.target);
+    const newLen = Math.max(0.5, Math.min(12, offset.length() + delta));
+    offset.normalize().multiplyScalar(newLen);
+    camera.position.copy(controls.target).add(offset);
+    controls.update();
+  }
+
+  function toggleOrtho() {
+    const vp = document.getElementById('vp');
+    const W = vp.clientWidth;
+    const H = vp.clientHeight;
+
+    if (camera.isPerspectiveCamera) {
+      const dist = camera.position.distanceTo(controls.target);
+      const halfH = dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      const halfW = halfH * camera.aspect;
+      const ortho = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.01, 100);
+      ortho.position.copy(camera.position);
+      ortho.quaternion.copy(camera.quaternion);
+      camera = ortho;
+    } else {
+      const persp = new THREE.PerspectiveCamera(38, W / H, 0.01, 100);
+      persp.position.copy(camera.position);
+      persp.quaternion.copy(camera.quaternion);
+      camera = persp;
+    }
+    controls.object = camera;
+    controls.update();
+  }
+
+  function frameModel() {
+    if (!paperGeo) return;
+    paperGeo.computeBoundingSphere();
+    const sphere = paperGeo.boundingSphere;
+    const center = new THREE.Vector3();
+    center.copy(sphere.center);
+    foldGroup.localToWorld(center);
+
+    const dist = sphere.radius * 2.8;
+    const dir = camera.position.clone().sub(controls.target).normalize();
+
+    controls.target.copy(center);
+    camera.position.copy(center).add(dir.multiplyScalar(dist));
+    controls.update();
+  }
+
+  // ── Outline geometry ──────────────────────────
+
+  function buildOutlineIndices() {
+    const n = SEGS + 1;
+    const indices = [];
+    for (let col = 0; col <= SEGS; col++) indices.push(col);
+    for (let row = 1; row <= SEGS; row++) indices.push(row * n + SEGS);
+    for (let col = SEGS - 1; col >= 0; col--) indices.push(SEGS * n + col);
+    for (let row = SEGS - 1; row >= 1; row--) indices.push(row * n);
+    return indices;
+  }
+
+  function createOutlineLine() {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute(
+      'position',
+      new THREE.BufferAttribute(new Float32Array(OUTLINE_INDICES.length * 3), 3)
+    );
+
+    return new THREE.LineLoop(geo, new THREE.LineBasicMaterial({
+      color: 0x333333,
+      linewidth: 1
+    }));
+  }
+
+  // ── Resize ────────────────────────────────────
 
   function resize() {
     const vp = document.getElementById('vp');
-    const W = vp.clientWidth, H = vp.clientHeight;
+    const W = vp.clientWidth;
+    const H = vp.clientHeight;
     renderer.setSize(W, H);
     camera.aspect = W / H;
     camera.updateProjectionMatrix();
   }
 
-  function loop() {
-    requestAnimationFrame(loop);
-    controls.update();
-    renderer.render(scene, camera);
+  function render() {
+    // render loop handles this continuously now
   }
 
-  /**
-   * Update paper mesh vertices from folded positions.
-   * Maps unit-square [0,1] to world [-1,1].
-   */
+  // ── Paper update ──────────────────────────────
+
   function updatePaper(vertices) {
+    if (!paperGeo || !vertices) return;
+
     const pos = paperGeo.attributes.position;
-    const n = pos.count;
-    for (let i = 0; i < n && i < vertices.length; i++) {
+    const n = Math.min(pos.count, vertices.length);
+
+    for (let i = 0; i < n; i++) {
       const v = vertices[i];
       pos.setXYZ(i, (v.x - 0.5) * 2, v.y * 2, (v.z - 0.5) * 2);
     }
+
     pos.needsUpdate = true;
     paperGeo.computeVertexNormals();
+    updateOutlinePositions();
 
-    // Redraw crease lines to follow the deformed mesh
-    if (currentCreaseData) redrawCreaseLines();
-
-    // Update edge wireframe
-    if (edgeLines) {
-      foldGroup.remove(edgeLines);
-      if (edgeLines.geometry) edgeLines.geometry.dispose();
-      const edgeGeo = new THREE.EdgesGeometry(paperGeo, 15);
-      const edgeMat = new THREE.LineBasicMaterial({ color: 0x888888, linewidth: 1 });
-      edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
-      foldGroup.add(edgeLines);
+    if (showCL && currentCreaseData.length) {
+      updateCreaseLinePositions();
     }
   }
 
-  // Store current crease line data so we can redraw when paper moves
-  var currentCreaseData = null;
-  var currentActiveIdx = -1;
+  function updateOutlinePositions() {
+    if (!outlineLine || !paperGeo) return;
 
-  /**
-   * Look up the folded 3D position for a point on the unit square [0,1]x[0,1]
-   * by bilinear interpolation from the mesh grid.
-   */
-  function sampleFoldedPosition(ux, uz, nOff) {
-    var pos = paperGeo.attributes.position;
-    var n = SEGS + 1; // vertices per row
+    const source = paperGeo.attributes.position;
+    const target = outlineLine.geometry.attributes.position;
 
-    // Clamp to mesh bounds
-    var fx = Math.max(0, Math.min(1, ux)) * SEGS;
-    var fz = Math.max(0, Math.min(1, uz)) * SEGS;
-    var col = Math.floor(fx), row = Math.floor(fz);
+    for (let i = 0; i < OUTLINE_INDICES.length; i++) {
+      const srcIdx = OUTLINE_INDICES[i];
+      target.setXYZ(i, source.getX(srcIdx), source.getY(srcIdx), source.getZ(srcIdx));
+    }
+
+    target.needsUpdate = true;
+    outlineLine.geometry.computeBoundingSphere();
+  }
+
+  // ── Bilinear mesh sampling ────────────────────
+
+  function sampleFoldedPositionToArray(ux, uz, nOff, arr, offset) {
+    const pos = paperGeo.attributes.position;
+    const n = SEGS + 1;
+
+    const fx = Math.max(0, Math.min(1, ux)) * SEGS;
+    const fz = Math.max(0, Math.min(1, uz)) * SEGS;
+    let col = Math.floor(fx);
+    let row = Math.floor(fz);
     col = Math.min(col, SEGS - 1);
     row = Math.min(row, SEGS - 1);
-    var tx = fx - col, tz = fz - row;
+    const tx = fx - col;
+    const tz = fz - row;
 
-    // Four corners of the grid cell
-    var i00 = row * n + col;
-    var i10 = row * n + col + 1;
-    var i01 = (row + 1) * n + col;
-    var i11 = (row + 1) * n + col + 1;
+    const i00 = row * n + col;
+    const i10 = row * n + col + 1;
+    const i01 = (row + 1) * n + col;
+    const i11 = (row + 1) * n + col + 1;
 
-    // Bilinear interpolation
-    var x = (1 - tx) * (1 - tz) * pos.getX(i00) + tx * (1 - tz) * pos.getX(i10) +
-            (1 - tx) * tz * pos.getX(i01) + tx * tz * pos.getX(i11);
-    var y = (1 - tx) * (1 - tz) * pos.getY(i00) + tx * (1 - tz) * pos.getY(i10) +
-            (1 - tx) * tz * pos.getY(i01) + tx * tz * pos.getY(i11);
-    var z = (1 - tx) * (1 - tz) * pos.getZ(i00) + tx * (1 - tz) * pos.getZ(i10) +
-            (1 - tx) * tz * pos.getZ(i01) + tx * tz * pos.getZ(i11);
+    const x = (1 - tx) * (1 - tz) * pos.getX(i00) + tx * (1 - tz) * pos.getX(i10) +
+              (1 - tx) * tz * pos.getX(i01) + tx * tz * pos.getX(i11);
+    const y = (1 - tx) * (1 - tz) * pos.getY(i00) + tx * (1 - tz) * pos.getY(i10) +
+              (1 - tx) * tz * pos.getY(i01) + tx * tz * pos.getY(i11);
+    const z = (1 - tx) * (1 - tz) * pos.getZ(i00) + tx * (1 - tz) * pos.getZ(i10) +
+              (1 - tx) * tz * pos.getZ(i01) + tx * tz * pos.getZ(i11);
 
-    // Offset slightly along normal for front/back
-    return new THREE.Vector3(x, y + nOff, z);
+    arr[offset] = x;
+    arr[offset + 1] = y + nOff;
+    arr[offset + 2] = z;
   }
 
-  /**
-   * Draw fold lines on the paper surface, deformed with the mesh.
-   * Each line is sampled as a polyline of ~20 points that follow the paper.
-   */
-  function updateCreaseLines(lines, activeIdx) {
-    currentCreaseData = lines;
-    currentActiveIdx = activeIdx || -1;
-    redrawCreaseLines();
+  // ── Crease lines ──────────────────────────────
+
+  function invertType(type) {
+    if (type === 'mountain') return 'valley';
+    if (type === 'valley') return 'mountain';
+    return type;
   }
 
-  function redrawCreaseLines() {
-    while (creaseLinesGroup.children.length) {
-      var c = creaseLinesGroup.children[0];
-      if (c.geometry) c.geometry.dispose();
-      if (c.material) c.material.dispose();
-      creaseLinesGroup.remove(c);
+  function getCreaseStyle(stepIndex, type, isBack) {
+    // Past steps: subtle gray
+    if (stepIndex < currentActiveIdx) {
+      return { color: 0x888888, opacity: 0.25 };
     }
-    var lines = currentCreaseData;
-    if (!lines || !showCL) return;
 
-    var SAMPLES = 20;
+    // Mountain: red (like reference diagrams)
+    if (type === 'mountain') {
+      return {
+        color: isBack ? 0xcc4444 : 0xaa2222,
+        opacity: stepIndex === currentActiveIdx ? 1.0 : 0.7
+      };
+    }
 
-    for (var i = 0; i < lines.length; i++) {
-      var step = lines[i];
+    // Valley: blue dashed
+    if (type === 'valley') {
+      return {
+        color: isBack ? 0x4466cc : 0x2244aa,
+        opacity: stepIndex === currentActiveIdx ? 1.0 : 0.7
+      };
+    }
 
-      var sides = [
-        { nOff:  0.005, type: step.type },
-        { nOff: -0.005, type: step.type === 'mountain' ? 'valley' : step.type === 'valley' ? 'mountain' : step.type }
+    // Axial/other: dark gray
+    return { color: 0x555555, opacity: 0.5 };
+  }
+
+  function disposeCreaseLines() {
+    while (creaseLinesGroup.children.length) {
+      const child = creaseLinesGroup.children[0];
+      creaseLinesGroup.remove(child);
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) child.material.dispose();
+    }
+    creaseEntries = [];
+  }
+
+  function refreshCreaseStyles() {
+    for (let i = 0; i < creaseEntries.length; i++) {
+      const entry = creaseEntries[i];
+      const style = getCreaseStyle(entry.stepIndex, entry.type, entry.isBack);
+      entry.material.color.setHex(style.color);
+      entry.material.opacity = style.opacity;
+      entry.material.needsUpdate = true;
+    }
+  }
+
+  function rebuildCreaseLines() {
+    disposeCreaseLines();
+
+    if (!showCL || !currentCreaseData.length) return;
+
+    for (let i = 0; i < currentCreaseData.length; i++) {
+      const step = currentCreaseData[i];
+      const defs = [
+        { isBack: false, nOff: 0.008, type: step.type },
+        { isBack: true, nOff: -0.008, type: invertType(step.type) }
       ];
 
-      for (var s = 0; s < sides.length; s++) {
-        var side = sides[s];
-        var col, opacity;
-        if (i < currentActiveIdx) {
-          col = s === 0 ? 0xaaaaaa : 0x666666; opacity = 0.5;
-        } else if (side.type === 'mountain') {
-          col = s === 0 ? 0xcc3333 : 0xff2222; opacity = 1.0;
-        } else if (side.type === 'valley') {
-          col = s === 0 ? 0x3366cc : 0x2266ff; opacity = 1.0;
-        } else {
-          col = 0x6699cc; opacity = 0.7;
-        }
+      for (let d = 0; d < defs.length; d++) {
+        const def = defs[d];
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute(
+          'position',
+          new THREE.BufferAttribute(new Float32Array((CREASE_SAMPLES + 1) * 3), 3)
+        );
 
-        var material = new THREE.LineDashedMaterial({
-          color: col, transparent: true, opacity: opacity,
-          dashSize: side.type === 'mountain' ? 0.08 : 0.05,
-          gapSize: side.type === 'mountain' ? 0.03 : 0.02,
-          linewidth: 2
+        const material = new THREE.LineBasicMaterial({
+          transparent: true,
+          opacity: 1,
+          depthWrite: false
         });
 
-        // Sample points along the crease line, mapped through folded mesh
-        var pts = [];
-        for (var t = 0; t <= SAMPLES; t++) {
-          var frac = t / SAMPLES;
-          var ux = step.line.x1 + (step.line.x2 - step.line.x1) * frac;
-          var uz = step.line.y1 + (step.line.y2 - step.line.y1) * frac;
-          pts.push(sampleFoldedPosition(ux, uz, side.nOff));
-        }
-
-        var geo = new THREE.BufferGeometry().setFromPoints(pts);
-        var line = new THREE.Line(geo, material);
-        line.computeLineDistances();
+        const line = new THREE.Line(geo, material);
         creaseLinesGroup.add(line);
+        creaseEntries.push({
+          geometry: geo,
+          material,
+          line,
+          stepIndex: i,
+          lineDef: step.line,
+          type: def.type,
+          isBack: def.isBack,
+          nOff: def.nOff
+        });
       }
     }
+
+    refreshCreaseStyles();
+  }
+
+  function updateCreaseLinePositions() {
+    for (let i = 0; i < creaseEntries.length; i++) {
+      const entry = creaseEntries[i];
+      const arr = entry.geometry.attributes.position.array;
+      const line = entry.lineDef;
+
+      for (let s = 0; s <= CREASE_SAMPLES; s++) {
+        const frac = s / CREASE_SAMPLES;
+        const ux = line.x1 + (line.x2 - line.x1) * frac;
+        const uz = line.y1 + (line.y2 - line.y1) * frac;
+        sampleFoldedPositionToArray(ux, uz, entry.nOff, arr, s * 3);
+      }
+
+      entry.geometry.attributes.position.needsUpdate = true;
+      entry.geometry.computeBoundingSphere();
+    }
+  }
+
+  function updateCreaseLines(lines, activeIdx) {
+    currentCreaseData = lines || [];
+    currentActiveIdx = typeof activeIdx === 'number' ? activeIdx : -1;
+
+    if (!showCL) {
+      creaseLinesGroup.visible = false;
+      return;
+    }
+
+    creaseLinesGroup.visible = true;
+    rebuildCreaseLines();
+    updateCreaseLinePositions();
+  }
+
+  function setActiveStep(activeIdx) {
+    const nextIdx = typeof activeIdx === 'number' ? activeIdx : -1;
+    if (nextIdx === currentActiveIdx) return;
+    currentActiveIdx = nextIdx;
+    refreshCreaseStyles();
+
   }
 
   function setWireframe(on) {
-    if (edgeLines) edgeLines.visible = on;
+    showWF = on;
+    if (wireframeMesh) wireframeMesh.visible = on;
   }
 
   function setCreaseLinesVisible(on) {
     showCL = on;
-    if (creaseLinesGroup) creaseLinesGroup.visible = on;
+    if (!creaseLinesGroup) return;
+
+    creaseLinesGroup.visible = on;
+    if (on) {
+      rebuildCreaseLines();
+      updateCreaseLinePositions();
+    }
   }
 
   function getBaseMesh() { return baseMeshData; }
 
-  function setGroupTilt(t) {
-    foldGroup.rotation.x = t * 0.15;
-    foldGroup.position.y = t * 0.1;
-  }
+  function setGroupTilt() {}
 
   function showEmpty(show) {
     const el = document.getElementById('empty-msg');
     if (el) el.style.display = show ? 'block' : 'none';
   }
 
-  return { init, updatePaper, updateCreaseLines, setWireframe, setCreaseLinesVisible,
-           getBaseMesh, setGroupTilt, showEmpty, resize };
+  return {
+    init,
+    updatePaper,
+    updateCreaseLines,
+    setActiveStep,
+    setWireframe,
+    setCreaseLinesVisible,
+    getBaseMesh,
+    setGroupTilt,
+    showEmpty,
+    resize
+  };
 })();
