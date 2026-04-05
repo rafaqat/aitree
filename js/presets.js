@@ -389,63 +389,84 @@ const Presets = (() => {
     };
   }
 
-  // ── Fortune Teller FOLD data ──
-  // Classic cootie catcher: 4 corners fold to center, then opens into 3D
+  // ── Fortune Teller / Cootie Catcher FOLD data ──
+  // Crease pattern: both diagonals (V) + both book folds (M) + inner diamond (V)
+  // Folded shape: 3D pyramid/tent that opens into 4 pockets
   var FORTUNE_FOLD = {
     vertices_coords: [
-      [0,0],[0.5,0],[1,0],       // 0-2: top
-      [1,0.5],                    // 3: right mid
-      [1,1],[0.5,1],[0,1],       // 4-6: bottom
-      [0,0.5],                    // 7: left mid
-      [0.5,0.5],                 // 8: center
-      [0.25,0.25],[0.75,0.25],   // 9-10: inner quad top
-      [0.75,0.75],[0.25,0.75]    // 11-12: inner quad bottom
+      [0, 0],       // 0: top-left corner
+      [0.5, 0],     // 1: top edge midpoint
+      [1, 0],       // 2: top-right corner
+      [1, 0.5],     // 3: right edge midpoint
+      [1, 1],       // 4: bottom-right corner
+      [0.5, 1],     // 5: bottom edge midpoint
+      [0, 1],       // 6: bottom-left corner
+      [0, 0.5],     // 7: left edge midpoint
+      [0.5, 0.5],   // 8: center
+      [0.25, 0.25], // 9: inner quad TL
+      [0.75, 0.25], // 10: inner quad TR
+      [0.75, 0.75], // 11: inner quad BR
+      [0.25, 0.75]  // 12: inner quad BL
     ],
     edges_vertices: [
-      [0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,0],  // boundary
-      [0,8],[8,4],     // diagonal 1
-      [2,8],[8,6],     // diagonal 2
-      [1,8],[8,5],     // vertical center
-      [7,8],[8,3],     // horizontal center
-      [1,7],[7,5],[5,3],[3,1],   // inner diamond
-      [0,9],[9,1],[9,8],         // top-left triangle details
-      [1,10],[10,2],[10,8],      // top-right
-      [3,11],[11,4],[11,8],      // bottom-right
-      [7,12],[12,6],[12,8]       // bottom-left
+      // Boundary
+      [0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,0],
+      // Diagonals (valley) — split at center
+      [0,9],[9,8],[8,11],[11,4],   // TL→BR diagonal
+      [2,10],[10,8],[8,12],[12,6], // TR→BL diagonal
+      // Book folds (mountain) — split at center
+      [1,8],[8,5],                 // vertical
+      [7,8],[8,3],                 // horizontal
+      // Inner diamond connecting edge midpoints (valley)
+      [1,7],[7,5],[5,3],[3,1],
+      // Radial connections
+      [9,1],[9,7],[10,1],[10,3],[11,3],[11,5],[12,5],[12,7]
     ],
     edges_assignment: [
       'B','B','B','B','B','B','B','B',
-      'V','V',
-      'V','V',
-      'M','M',
-      'M','M',
-      'V','V','V','V',
-      'V','V','M',
-      'V','V','M',
-      'V','V','M',
-      'V','V','M'
+      'V','V','V','V',   // diagonal 1
+      'V','V','V','V',   // diagonal 2
+      'M','M',           // vertical book fold
+      'M','M',           // horizontal book fold
+      'V','V','V','V',   // inner diamond
+      'M','M','M','M','M','M','M','M' // radial
     ],
     faces_vertices: [
-      [0,9,8],[0,1,9],[1,9,8],
-      [1,10,8],[1,2,10],[2,10,8],
-      [2,3,8],[3,11,8],[3,4,11],[4,11,8],
-      [4,5,8],[5,12,8],[5,6,12],[6,12,8],
-      [6,7,8],[7,0,8]
+      // 8 outer triangles (between boundary and inner diamond)
+      [0, 1, 9],     // top-left upper
+      [1, 2, 10],    // top-right upper
+      [2, 3, 10],    // right upper
+      [3, 4, 11],    // right lower
+      [4, 5, 11],    // bottom-right lower
+      [5, 6, 12],    // bottom-left lower
+      [6, 7, 12],    // left lower
+      [7, 0, 9],     // left upper
+      // 8 inner triangles (between inner diamond and center)
+      [9, 1, 8],     // inner top-left A
+      [1, 10, 8],    // inner top-right A
+      [10, 3, 8],    // inner right A
+      [3, 11, 8],    // inner right B
+      [11, 5, 8],    // inner bottom A
+      [5, 12, 8],    // inner bottom B
+      [12, 7, 8],    // inner left A
+      [7, 9, 8]      // inner left B
     ],
+    // Folded 2D coords: corners fold to center, edge midpoints splay outward
+    // forming a cross/star shape. The renderer adds Y height from center distance.
     folded_coords: [
-      [0.35,0.35],  // 0: TL corner → folds toward center
-      [0.5,0.1],    // 1: top mid → extends outward
-      [0.65,0.35],  // 2: TR corner → folds toward center
-      [0.9,0.5],    // 3: right mid → extends outward
-      [0.65,0.65],  // 4: BR corner → folds toward center
-      [0.5,0.9],    // 5: bottom mid → extends outward
-      [0.35,0.65],  // 6: BL corner → folds toward center
-      [0.1,0.5],    // 7: left mid → extends outward
-      [0.5,0.5],    // 8: center stays
-      [0.42,0.3],   // 9: inner top-left
-      [0.58,0.3],   // 10: inner top-right
-      [0.58,0.7],   // 11: inner bottom-right
-      [0.42,0.7]    // 12: inner bottom-left
+      [0.5, 0.5],     // 0: TL corner → folds to center
+      [0.5, 0.05],    // 1: top mid → extends up
+      [0.5, 0.5],     // 2: TR corner → folds to center
+      [0.95, 0.5],    // 3: right mid → extends right
+      [0.5, 0.5],     // 4: BR corner → folds to center
+      [0.5, 0.95],    // 5: bottom mid → extends down
+      [0.5, 0.5],     // 6: BL corner → folds to center
+      [0.05, 0.5],    // 7: left mid → extends left
+      [0.5, 0.5],     // 8: center stays
+      [0.35, 0.35],   // 9: inner TL → between corner and edge
+      [0.65, 0.35],   // 10: inner TR
+      [0.65, 0.65],   // 11: inner BR
+      [0.35, 0.65]    // 12: inner BL
     ]
   };
 
